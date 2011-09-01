@@ -14,6 +14,7 @@
 
 #include "copyright.h"
 #include "system.h"
+#include "synch.h" // * para probar los hilos
 
 //----------------------------------------------------------------------
 // SimpleThread
@@ -66,3 +67,101 @@ ThreadTest()
     SimpleThread( (void*)"Hilo 0");
 }
 
+int varTest = 0;
+
+
+void
+lockTaker(void* lock)
+{
+	Lock* tLock = (Lock*) lock;
+	
+	tLock->Acquire();
+	printf("Lock acquired\n");
+	for (int i = 1; i <= 10; i++)
+	{
+		if (i == 5) currentThread->Yield();
+		varTest += 1;
+	}
+	printf("varTest: %d\n", varTest);
+	printf("Lock released\n");
+	tLock->Release();
+	
+}
+
+// * para probar locks y variables de condicion
+void
+LockTest()
+{
+    DEBUG('t', "Entering Lock Test");
+    
+	Lock* theLock = new Lock("Test Lock");
+    for ( int k=1; k<=4; k++) {
+      char* threadname = new char[100];
+      sprintf(threadname, "HiloLock %d", k);
+      Thread* newThread = new Thread (threadname);
+      newThread->Fork (lockTaker, (void*)theLock);
+    }
+    
+    lockTaker((void*)theLock);
+}
+
+List<int> buffer;
+int tamBuff = 0;
+int maxBuff = 5;
+
+int vecesP = 11;
+int vecesC = 11;
+
+Lock* lockCV = new Lock("Test Lock CV");
+Condition* emptyCV = new Condition("Empty CV", lockCV);
+Condition* fullCV = new Condition("Full CV", lockCV);
+
+void productor(void* n)
+{
+	lockCV->Acquire();
+	while (vecesP--)
+	{
+		if (tamBuff == maxBuff)
+		{
+			fullCV->Wait();
+		}
+		buffer.Append(1);
+		tamBuff++;
+		printf("Productor (%d)\n", vecesP);
+		currentThread->Yield();
+		if (tamBuff == 1)
+		{
+			emptyCV->Signal();
+		}
+	}
+}
+
+void consumidor(void* n)
+{
+	lockCV->Acquire();
+	while (vecesC--)
+	{
+		if (tamBuff == 0)
+		{
+			emptyCV->Wait();
+		}
+		buffer.Remove();
+		tamBuff--;
+		printf("Consumidor (%d)\n", vecesC);
+		if (tamBuff == maxBuff - 1)
+		{
+			fullCV->Signal();
+		}
+	}
+}
+
+void CVTest()
+{
+	DEBUG('t', "Entering CV Test");
+	
+	Thread* newThread = new Thread("Consumidor");
+	newThread->Fork(consumidor, (void*) 1);
+
+	newThread = new Thread("Productor");
+	newThread->Fork(productor, (void*) 1);
+}

@@ -118,9 +118,10 @@ void Lock::Acquire()
 }
 void Lock::Release()
 {
-	ASSERT(isHeldByCurrentThread()); 
+	ASSERT(isHeldByCurrentThread());
+	lockThread = NULL;  // Es importante hacer esto antes de V(). Si lo pongo después de liberar el lock
+	                    // puede haber cambio de contexto y pisar que thread tiene el lock.
 	lockSemaphore->V(); // Si es el hilo actual, lo removemos de la cola, lo dejamos en estado listo con V().
-	lockThread = NULL;
 }
 bool Lock::isHeldByCurrentThread()
 {
@@ -146,6 +147,7 @@ void Condition::Wait()
 	cvSemList->Append(sem);
 	cvLock->Release();
 	sem->P();
+	cvLock->Acquire();
 }
 void Condition::Signal()
 {
