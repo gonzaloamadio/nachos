@@ -131,38 +131,40 @@ Condition::Condition(const char* debugName, Lock* conditionLock)
 {
 	name = debugName;
 	cvLock = conditionLock;
-	cvList = new List<Thread*>;
+	cvSemList = new List<Semaphore*>;
 }
 Condition::~Condition()
 {
 	cvLock = NULL;
+	delete cvSemList;
 }
 void Condition::Wait()
 {
+	Semaphore* sem;
 	ASSERT(cvLock->isHeldByCurrentThread());
+	sem = new Semaphore("CV Semaphore",0);
+	cvSemList->Append(sem);
 	cvLock->Release();
-	cvList->Append(currentThread);
-	currentThread->Sleep();
-	cvLock->Acquire();
+	sem->P();
 }
 void Condition::Signal()
 {
-	Thread* thread;
+	Semaphore* sem;
 	ASSERT(cvLock->isHeldByCurrentThread());
-	if (!cvList->IsEmpty())
+	if (!cvSemList->IsEmpty())
 	{
-		thread = cvList->Remove();
-		scheduler->ReadyToRun(thread);
+		sem = cvSemList->Remove();
+		sem->V();
 	}
 }
 void Condition::Broadcast()
 {
-	Thread* thread;
+	Semaphore* sem;
 	ASSERT(cvLock->isHeldByCurrentThread());
-	while (!cvList->IsEmpty())  // Recorremos toda la lista, vamos removiendo los hilos y
-	{                           // dejandolos en estado listos para correr. 
-		thread = cvList->Remove();
-		scheduler->ReadyToRun(thread);
+	while (!cvSemList->IsEmpty())  // Recorremos toda la lista, vamos removiendo los hilos y
+	{                            // dejandolos en estado listos para correr. 
+		sem = cvSemList->Remove();
+		sem->V();
 	}
 }
 

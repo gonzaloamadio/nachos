@@ -146,7 +146,7 @@ class Condition {
   // aqu� se a�aden otros campos que sean necesarios
     const char* name;
     Lock *cvLock;   // * Lock pasado en el arg
-    List<Thread*> *cvList; // * Lista de threads durmiendo 
+    List<Semaphore*> *cvSemList; // * Lista de threads durmiendo 
 };
 
 /*
