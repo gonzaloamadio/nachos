@@ -67,6 +67,7 @@ Semaphore::P()
     IntStatus oldLevel = interrupt->SetLevel(IntOff);	// disable interrupts
     
     while (value == 0) { 			// semaphore not available
+    DEBUG('t', "Sent \"%s\" to sleep using \"%s\"\n", currentThread->getName(), getName());
 	queue->Append(currentThread);		// so go to sleep
 	currentThread->Sleep();
     } 
@@ -115,10 +116,12 @@ void Lock::Acquire()
 	ASSERT(!isHeldByCurrentThread()); //Nos fijamos que no haya acquire anidado, para que no lo vuelva a poner en la cola
 	lockSemaphore->P(); // Decrementamos el valor del semaforo, si no es el currentThread , P() lo manda a dormir
 	lockThread = currentThread;  // Si viene otro proceso que no es el que tiene el cerrojo, es mandado a dormir y no se ejecuta esta sentencia.
+	DEBUG('t', "\"%s\" is currently holding \"%s\"\n", lockThread->getName(), getName());
 }
 void Lock::Release()
 {
 	ASSERT(isHeldByCurrentThread());
+	DEBUG('t', "\"%s\" has released \"%s\"\n", lockThread->getName(), getName());
 	lockThread = NULL;  // Es importante hacer esto antes de V(). Si lo pongo después de liberar el lock
 	                    // puede haber cambio de contexto y pisar que thread tiene el lock.
 	lockSemaphore->V(); // Si es el hilo actual, lo removemos de la cola, lo dejamos en estado listo con V().
@@ -143,7 +146,7 @@ void Condition::Wait()
 {
 	Semaphore* sem;
 	ASSERT(cvLock->isHeldByCurrentThread());
-	sem = new Semaphore("CV Semaphore",0);
+	sem = new Semaphore("CV Semaphore", 0);
 	cvSemList->Append(sem);
 	cvLock->Release();
 	sem->P();
@@ -170,4 +173,48 @@ void Condition::Broadcast()
 	}
 }
 
+Port::Port(const char *debugName)
+{
+	name = debugName;
+	sender = 0;
+	receiver = 0;
+	srLock = new Lock("Port Lock");
+	sendCondition = new Condition("Port sendCondition",srLock);
+	receiveCondition = new Condition("Port receiveCondition",srLock);
+	emptyMessage = true;
+}
 
+Port::~Port()
+{
+	delete sendCondition;
+	delete receiveCondition;
+	delete srLock;
+}
+
+void Port::Send(int message)
+{
+	srLock->Acquire();
+	sender++;
+	while (receiver == 0 || (emptyMessage == false)) // para no sobreescribir un msj existente
+		sendCondition->Wait();	
+	receiver--;
+	theMessage = message;
+	emptyMessage = false;
+	receiveCondition->Signal();
+	srLock->Release();
+}
+
+
+void Port::Receive(int *message)
+{
+	srLock->Acquire();
+	receiver++;
+	sendCondition->Signal();
+	while (sender == 0 || emptyMessage)
+		receiveCondition->Wait();	
+	sender--;
+	*message = theMessage;
+	emptyMessage = true;
+	sendCondition->Signal();
+	srLock->Release();
+}

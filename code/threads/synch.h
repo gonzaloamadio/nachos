@@ -175,4 +175,25 @@ class Condition {
 
 */
 
+class Port {
+	
+	public:
+	
+		Port(const char *debugName);
+		~Port();
+		const char* getName() { return (name); }
+		
+		void Send(int message);
+		void Receive(int *message);
+	
+	private: 
+		const char *name;
+		Lock *srLock;
+		Condition *sendCondition;
+		Condition *receiveCondition;
+		int theMessage;
+		int sender, receiver;
+		bool emptyMessage;
+};
+
 #endif // SYNCH_H

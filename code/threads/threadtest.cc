@@ -15,7 +15,9 @@
 #include "copyright.h"
 #include "system.h"
 #include "synch.h" // * para probar los hilos
+#include <iostream>
 
+using namespace std;
 //----------------------------------------------------------------------
 // SimpleThread
 // 	Loop 10 times, yielding the CPU to another ready thread 
@@ -109,17 +111,17 @@ List<int> buffer;
 int tamBuff = 0;
 int maxBuff = 5;
 
-int vecesP = 11;
-int vecesC = 11;
+int vecesP = 50;
+int vecesC = 50;
 
 Lock* lockCV = new Lock("Test Lock CV");
 Condition* emptyCV = new Condition("Empty CV", lockCV);
 Condition* fullCV = new Condition("Full CV", lockCV);
 
-void productor(void* n)
+void productor(void* name)
 {
 	lockCV->Acquire();
-	while (vecesP--)
+	while (true)
 	{
 		if (tamBuff == maxBuff)
 		{
@@ -127,8 +129,7 @@ void productor(void* n)
 		}
 		buffer.Append(1);
 		tamBuff++;
-		printf("Productor (%d)\n", vecesP);
-		currentThread->Yield();
+		printf("%s (%d)\n", (char*) name, tamBuff);
 		if (tamBuff == 1)
 		{
 			emptyCV->Signal();
@@ -136,18 +137,18 @@ void productor(void* n)
 	}
 }
 
-void consumidor(void* n)
+void consumidor(void* name)
 {
 	lockCV->Acquire();
-	while (vecesC--)
+	while (true)
 	{
 		if (tamBuff == 0)
 		{
 			emptyCV->Wait();
 		}
-		buffer.Remove();
+		ASSERT(buffer.Remove() != NULL);
 		tamBuff--;
-		printf("Consumidor (%d)\n", vecesC);
+		printf("%s (%d)\n", (char*) name, tamBuff);
 		if (tamBuff == maxBuff - 1)
 		{
 			fullCV->Signal();
@@ -159,9 +160,114 @@ void CVTest()
 {
 	DEBUG('t', "Entering CV Test");
 	
-	Thread* newThread = new Thread("Consumidor");
-	newThread->Fork(consumidor, (void*) 1);
-
-	newThread = new Thread("Productor");
-	newThread->Fork(productor, (void*) 1);
+	for (int i = 1; i <= 3; i++)
+	{
+		char* threadname = new char[100];
+		sprintf(threadname, "Consumidor %d", i);
+		Thread* newThread = new Thread(threadname);
+		newThread->Fork(consumidor, (void*) threadname);
+	}
+	for (int i = 1; i <= 3; i++)
+	{
+		char* threadname = new char[100];
+		sprintf(threadname, "Productor %d", i);
+		Thread* newThread = new Thread(threadname);
+		newThread->Fork(productor, (void*) threadname);
+	}
 }
+
+Port *puerto = new Port("Test Port");
+
+void PortTester(void *n)
+{
+	int destino;
+	
+	puerto->Receive(&destino);
+	
+	printf("Este es el secreto de Maxi: %d\n", destino);
+	
+}
+
+void PortTest()
+{
+	puerto->Send(32);
+	Thread* newThread = new Thread("PortTester");
+	newThread->Fork(PortTester, (void*) 1);
+}
+
+int cont = 0, n_vc = 1;
+bool bool_vc = false;
+Lock* lock_vc = new Lock("lock vc");
+Condition* condition_vc = new Condition("condition vc",lock_vc);
+
+
+void VCf(void* name) {
+
+  if(!cont) {
+    cont++;
+    cout << currentThread->getName() << " este es el valor de bool_vc: " << bool_vc << endl;
+    cout << "este es el valor de n_vc: " << n_vc << endl;
+    n_vc++;
+    lock_vc->Acquire();
+    cout << "este es el valor de n_vc: " << n_vc << endl;
+    if(!bool_vc)
+      condition_vc->Wait();
+
+    n_vc++;
+    cout << "este es el valor de n_vc: " << n_vc << endl;
+    cout << currentThread->getName() << " este es el valor de bool_vc: " << bool_vc << endl;
+    return;
+  }
+  cout << currentThread->getName() << " este es el valor de bool_vc: " << bool_vc << endl;
+  currentThread->Yield();
+  lock_vc->Acquire();
+  
+  bool_vc = !bool_vc;
+  condition_vc->Signal();
+
+  lock_vc->Release();  
+}
+
+void VCTest(){
+  DEBUG('t', "Entering VCTest");
+  for (int k=1; k<=1; k++) {
+    char* threadname = new char[100];
+    sprintf(threadname, "Hilo %d", k);
+    Thread* newThread = new Thread (threadname);
+    newThread->Fork (VCf, (void*)threadname);
+  }
+  
+  VCf( (void*)"Hilo 0");
+}
+
+int count = 0;
+Port* port = new Port("port");
+
+void SendReceiveF(void *name) {
+ 
+  int threadName    = (long)name;
+  int tmp;
+
+  if(threadName >= 5) {
+    port->Send(threadName); 
+  } else {
+    port->Receive(&tmp);
+    cout << currentThread->getName() << " Received value: " << tmp << endl;
+  }
+}
+
+void
+SendReceiveTest()
+{
+    DEBUG('t', "Entering SendReceiveTest");
+
+    for ( int k=1; k<=9; k++) {
+      char* threadname = new char[100];
+      sprintf(threadname, "Hilo %d", k);
+      Thread* newThread = new Thread (threadname);
+      newThread->Fork (SendReceiveF, (void*)k);
+    }
+    
+    SendReceiveF( (void*)0);
+}
+

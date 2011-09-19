@@ -52,7 +52,7 @@
 
 #include "utility.h"
 #include "system.h"
-
+#include <iostream>
 
 // External functions used by this file
 
@@ -66,7 +66,9 @@ void MailTest(int networkID);
 
 void LockTest();
 void CVTest();
-
+void PortTest();
+void VCTest();
+void SendReceiveTest();
 //----------------------------------------------------------------------
 // main
 // 	Bootstrap the operating system kernel.  
@@ -93,7 +95,10 @@ main(int argc, char **argv)
 #ifdef THREADS
     //ThreadTest();
     //LockTest();
-    CVTest();
+    //CVTest();
+    //PortTest();
+    //VCTest();
+    SendReceiveTest();
 #endif
 
     for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {
