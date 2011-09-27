@@ -79,7 +79,7 @@ class Thread {
     HostMemoryAddress machineState[MachineStateSize];	// all registers except for stackTop
 
   public:
-    Thread(const char* debugName, int join);	// initialize a Thread 
+    Thread(const char* debugName, int join, int priority);	// initialize a Thread 
     ~Thread(); 				// deallocate a Thread
 					// NOTE -- thread being deleted
 					// must not be running when delete 
@@ -97,7 +97,10 @@ class Thread {
     void CheckOverflow();   			// Check if thread has 
 						// overflowed its stack
 	void Join(Thread* child);
-
+	
+	int getPriority() {return threadPriority;}
+	void setPriority(int newPriority) {threadPriority = newPriority;}
+	
 	Port* getPort(){return port;} // * para obtener el puerto del hijo en el join
 
     void setStatus(ThreadStatus st) { status = st; }
@@ -112,7 +115,7 @@ class Thread {
 					// (If NULL, don't deallocate stack)
     ThreadStatus status;		// ready, running or blocked
     const char* name;
-
+	int threadPriority;
     void StackAllocate(VoidFunctionPtr func, void* arg);
     					// Allocate a stack for thread.
 					// Used internally by Fork()

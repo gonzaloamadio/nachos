@@ -9,6 +9,8 @@
 #ifndef SCHEDULER_H
 #define SCHEDULER_H
 
+#define MAX_PRIORITY 10
+
 #include "copyright.h"
 #include "list.h"
 #include "thread.h"
@@ -29,8 +31,10 @@ class Scheduler {
     void Print();			// Print contents of ready list
     
   private:
-    List<Thread*> *readyList;  		// queue of threads that are ready to run,
+    List<Thread*> *readyList;
+      		// queue of threads that are ready to run,
 					// but not running
+	List<Thread*> *priorityArray[MAX_PRIORITY];
 };
 
 #endif // SCHEDULER_H

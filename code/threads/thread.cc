@@ -34,13 +34,14 @@ const unsigned STACK_FENCEPOST = 0xdeadbeef;
 //	"threadName" is an arbitrary string, useful for debugging.
 //----------------------------------------------------------------------
 
-Thread::Thread(const char* threadName, int join = 0)
+Thread::Thread(const char* threadName, int join = 0, int priority = 0)
 {
     name = threadName;
     stackTop = NULL;
     stack = NULL;
     status = JUST_CREATED;
     toBeJoined = join;
+    threadPriority = priority;
     if (toBeJoined != 0)
 		port = new Port("Thread Port");
 #ifdef USER_PROGRAM

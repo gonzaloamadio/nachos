@@ -62,7 +62,7 @@ ThreadTest()
     for ( int k=1; k<=10; k++) {
       char* threadname = new char[100];
       sprintf(threadname, "Hilo %d", k);
-      Thread* newThread = new Thread (threadname,0);
+      Thread* newThread = new Thread (threadname,0,0);
       newThread->Fork (SimpleThread, (void*)threadname);
     }
     
@@ -100,7 +100,7 @@ LockTest()
     for ( int k=1; k<=4; k++) {
       char* threadname = new char[100];
       sprintf(threadname, "HiloLock %d", k);
-      Thread* newThread = new Thread (threadname,0);
+      Thread* newThread = new Thread (threadname,0,0);
       newThread->Fork (lockTaker, (void*)theLock);
     }
     
@@ -193,7 +193,7 @@ void PortTester(void *n)
 void PortTest()
 {
 	puerto->Send(32);
-	Thread* newThread = new Thread("PortTester",0);
+	Thread* newThread = new Thread("PortTester",0,0);
 	newThread->Fork(PortTester, (void*) 1);
 }
 
@@ -235,7 +235,7 @@ void VCTest(){
   for (int k=1; k<=1; k++) {
     char* threadname = new char[100];
     sprintf(threadname, "Hilo %d", k);
-    Thread* newThread = new Thread (threadname,0);
+    Thread* newThread = new Thread (threadname,0,0);
     newThread->Fork (VCf, (void*)threadname);
   }
   
@@ -266,7 +266,7 @@ SendReceiveTest()
     for ( int k=1; k<=9; k++) {
       char* threadname = new char[100];
       sprintf(threadname, "Hilo %d", k);
-      Thread* newThread = new Thread (threadname,0);
+      Thread* newThread = new Thread (threadname,0,0);
       newThread->Fork (SendReceiveF, (void*)k);
     }
     
@@ -278,13 +278,13 @@ int testnum = 1;
 void
 Joiner(Thread *joinee)
 {
-  currentThread->Yield();
-  currentThread->Yield();
+  //currentThread->Yield();
+  //currentThread->Yield();
 
   printf("Waiting for the Joinee to finish executing.\n");
 
-  currentThread->Yield();
-  currentThread->Yield();
+  //currentThread->Yield();
+  //currentThread->Yield();
 
   // Note that, in this program, the "joinee" has not finished
   // when the "joiner" calls Join().  You will also need to handle
@@ -293,13 +293,13 @@ Joiner(Thread *joinee)
 
   currentThread->Join(joinee);
 
-  currentThread->Yield();
-  currentThread->Yield();
+  //currentThread->Yield();
+  //currentThread->Yield();
 
   printf("Joinee has finished executing, we can continue.\n");
 
-  currentThread->Yield();
-  currentThread->Yield();
+ // currentThread->Yield();
+  //currentThread->Yield();
 }
 
 void
@@ -320,8 +320,8 @@ Joinee()
 void
 ForkerThread()
 {
-  Thread *joiner = new Thread("joiner", 0);  // will not be joined
-  Thread *joinee = new Thread("joinee", 1);  // WILL be joined
+  Thread *joiner = new Thread("joiner", 0,4);  // will not be joined
+  Thread *joinee = new Thread("joinee", 1,1);  // WILL be joined
 
   // fork off the two threads and let them do their business
   joiner->Fork((VoidFunctionPtr) Joiner, (void*) joinee);
@@ -330,3 +330,5 @@ ForkerThread()
   // this thread is done and can go on its merry way
   printf("Forked off the joiner and joiner threads.\n");
 }
+
+
