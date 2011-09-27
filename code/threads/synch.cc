@@ -150,6 +150,7 @@ void Condition::Wait()
 	cvSemList->Append(sem);
 	cvLock->Release();
 	sem->P();
+	delete sem;
 	cvLock->Acquire();
 }
 void Condition::Signal()

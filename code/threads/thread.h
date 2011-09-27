@@ -39,6 +39,7 @@
 
 #include "copyright.h"
 #include "utility.h"
+class Port; 
 
 #ifdef USER_PROGRAM
 #include "machine.h"
@@ -78,7 +79,7 @@ class Thread {
     HostMemoryAddress machineState[MachineStateSize];	// all registers except for stackTop
 
   public:
-    Thread(const char* debugName);	// initialize a Thread 
+    Thread(const char* debugName, int join);	// initialize a Thread 
     ~Thread(); 				// deallocate a Thread
 					// NOTE -- thread being deleted
 					// must not be running when delete 
@@ -95,6 +96,10 @@ class Thread {
     
     void CheckOverflow();   			// Check if thread has 
 						// overflowed its stack
+	void Join(Thread* child);
+
+	Port* getPort(){return port;} // * para obtener el puerto del hijo en el join
+
     void setStatus(ThreadStatus st) { status = st; }
     const char* getName() { return (name); }
     void Print() { printf("%s, ", name); }
@@ -111,6 +116,8 @@ class Thread {
     void StackAllocate(VoidFunctionPtr func, void* arg);
     					// Allocate a stack for thread.
 					// Used internally by Fork()
+	int toBeJoined;
+	Port* port;
 
 #ifdef USER_PROGRAM
 // A thread running a user program actually has *two* sets of CPU registers -- 

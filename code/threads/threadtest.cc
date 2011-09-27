@@ -62,7 +62,7 @@ ThreadTest()
     for ( int k=1; k<=10; k++) {
       char* threadname = new char[100];
       sprintf(threadname, "Hilo %d", k);
-      Thread* newThread = new Thread (threadname);
+      Thread* newThread = new Thread (threadname,0);
       newThread->Fork (SimpleThread, (void*)threadname);
     }
     
@@ -100,13 +100,14 @@ LockTest()
     for ( int k=1; k<=4; k++) {
       char* threadname = new char[100];
       sprintf(threadname, "HiloLock %d", k);
-      Thread* newThread = new Thread (threadname);
+      Thread* newThread = new Thread (threadname,0);
       newThread->Fork (lockTaker, (void*)theLock);
     }
     
     lockTaker((void*)theLock);
 }
 
+/*
 List<int> buffer;
 int tamBuff = 0;
 int maxBuff = 5;
@@ -164,17 +165,18 @@ void CVTest()
 	{
 		char* threadname = new char[100];
 		sprintf(threadname, "Consumidor %d", i);
-		Thread* newThread = new Thread(threadname);
+		Thread* newThread = new Thread(threadname,0);
 		newThread->Fork(consumidor, (void*) threadname);
 	}
 	for (int i = 1; i <= 3; i++)
 	{
 		char* threadname = new char[100];
 		sprintf(threadname, "Productor %d", i);
-		Thread* newThread = new Thread(threadname);
+		Thread* newThread = new Thread(threadname,0);
 		newThread->Fork(productor, (void*) threadname);
 	}
 }
+*/
 
 Port *puerto = new Port("Test Port");
 
@@ -184,14 +186,14 @@ void PortTester(void *n)
 	
 	puerto->Receive(&destino);
 	
-	printf("Este es el secreto de Maxi: %d\n", destino);
+	printf("Este es el secreto: %d\n", destino);
 	
 }
 
 void PortTest()
 {
 	puerto->Send(32);
-	Thread* newThread = new Thread("PortTester");
+	Thread* newThread = new Thread("PortTester",0);
 	newThread->Fork(PortTester, (void*) 1);
 }
 
@@ -233,7 +235,7 @@ void VCTest(){
   for (int k=1; k<=1; k++) {
     char* threadname = new char[100];
     sprintf(threadname, "Hilo %d", k);
-    Thread* newThread = new Thread (threadname);
+    Thread* newThread = new Thread (threadname,0);
     newThread->Fork (VCf, (void*)threadname);
   }
   
@@ -264,10 +266,67 @@ SendReceiveTest()
     for ( int k=1; k<=9; k++) {
       char* threadname = new char[100];
       sprintf(threadname, "Hilo %d", k);
-      Thread* newThread = new Thread (threadname);
+      Thread* newThread = new Thread (threadname,0);
       newThread->Fork (SendReceiveF, (void*)k);
     }
     
     SendReceiveF( (void*)0);
 }
 
+int testnum = 1;
+
+void
+Joiner(Thread *joinee)
+{
+  currentThread->Yield();
+  currentThread->Yield();
+
+  printf("Waiting for the Joinee to finish executing.\n");
+
+  currentThread->Yield();
+  currentThread->Yield();
+
+  // Note that, in this program, the "joinee" has not finished
+  // when the "joiner" calls Join().  You will also need to handle
+  // and test for the case when the "joinee" _has_ finished when
+  // the "joiner" calls Join().
+
+  currentThread->Join(joinee);
+
+  currentThread->Yield();
+  currentThread->Yield();
+
+  printf("Joinee has finished executing, we can continue.\n");
+
+  currentThread->Yield();
+  currentThread->Yield();
+}
+
+void
+Joinee()
+{
+  int i;
+
+  for (i = 0; i < 5; i++) {
+    printf("Smell the roses.\n");
+    currentThread->Yield();
+  }
+
+  currentThread->Yield();
+  printf("Done smelling the roses!\n");
+  currentThread->Yield();
+}
+
+void
+ForkerThread()
+{
+  Thread *joiner = new Thread("joiner", 0);  // will not be joined
+  Thread *joinee = new Thread("joinee", 1);  // WILL be joined
+
+  // fork off the two threads and let them do their business
+  joiner->Fork((VoidFunctionPtr) Joiner, (void*) joinee);
+  joinee->Fork((VoidFunctionPtr) Joinee, 0);
+
+  // this thread is done and can go on its merry way
+  printf("Forked off the joiner and joiner threads.\n");
+}

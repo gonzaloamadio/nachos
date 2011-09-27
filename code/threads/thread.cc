@@ -20,6 +20,8 @@
 #include "synch.h"
 #include "system.h"
 
+List<Thread*> * procList = new List<Thread*>; // * lista de procesos creados , en el fork se lo vamos metiendo
+
 // this is put at the top of the execution stack,
 // for detecting stack overflows
 const unsigned STACK_FENCEPOST = 0xdeadbeef;	
@@ -32,12 +34,15 @@ const unsigned STACK_FENCEPOST = 0xdeadbeef;
 //	"threadName" is an arbitrary string, useful for debugging.
 //----------------------------------------------------------------------
 
-Thread::Thread(const char* threadName)
+Thread::Thread(const char* threadName, int join = 0)
 {
     name = threadName;
     stackTop = NULL;
     stack = NULL;
     status = JUST_CREATED;
+    toBeJoined = join;
+    if (toBeJoined != 0)
+		port = new Port("Thread Port");
 #ifdef USER_PROGRAM
     space = NULL;
 #endif
@@ -101,6 +106,7 @@ Thread::Fork(VoidFunctionPtr func, void* arg)
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     scheduler->ReadyToRun(this);	// ReadyToRun assumes that interrupts 
 					// are disabled!
+	procList->Append(this);
     interrupt->SetLevel(oldLevel);
 }    
 
@@ -151,6 +157,20 @@ Thread::Finish ()
     
     DEBUG('t', "Finishing thread \"%s\"\n", getName());
     
+    if (toBeJoined != 0)
+		port->Send(0);
+	
+	Thread *first, *temp; // * para saber cuando parar de recorre procList
+	first = procList->Remove();
+	procList->Append(first);
+	
+	do
+	{
+		temp = procList->Remove();
+		if (this != temp)
+			procList->Append(temp);
+	} while (temp != first);
+        
     threadToBeDestroyed = currentThread;
     Sleep();					// invokes SWITCH
     // not reached
@@ -310,3 +330,30 @@ Thread::RestoreUserState()
 	machine->WriteRegister(i, userRegisters[i]);
 }
 #endif
+
+void
+Thread::Join(Thread* child)
+{
+	Thread* first, *temp; // * para saber cuando parar de recorre procList
+	first = procList->Remove();
+	procList->Append(first);
+	
+	do
+	{
+		temp = procList->Remove();
+		if (child != temp)
+		{
+			procList->Append(temp);
+		}
+		else
+		{
+			procList->Append(temp);
+			int msj;
+			Port * joinPort = child->getPort(); 
+			joinPort->Receive(&msj);
+			delete joinPort; // el padre libera el port, si lo hace el hijo en su destructor el scheduler borra el puerto antes que termine el receive
+			return;
+		}
+	} while (temp != first);
+}
+
