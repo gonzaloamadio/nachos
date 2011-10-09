@@ -70,6 +70,7 @@ void PortTest();
 void VCTest();
 void SendReceiveTest();
 void ForkerThread();
+void PriorityTest();
 //----------------------------------------------------------------------
 // main
 // 	Bootstrap the operating system kernel.  
@@ -100,7 +101,8 @@ main(int argc, char **argv)
     //PortTest();
     //VCTest();
     //SendReceiveTest();
-    ForkerThread();
+    //ForkerThread();
+    PriorityTest();
 #endif
 
     for (argc--, argv++; argc > 0; argc -= argCount, argv += argCount) {

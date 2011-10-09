@@ -29,10 +29,8 @@
 
 Scheduler::Scheduler()
 { 
-    //readyList = new List<Thread*>; 
     for(int i=0; i < MAX_PRIORITY ;i++)
-		priorityArray[i] = new List<Thread*>;
-    
+		readyList[i] = new List<Thread*>;
 } 
 
 //----------------------------------------------------------------------
@@ -42,11 +40,8 @@ Scheduler::Scheduler()
 
 Scheduler::~Scheduler()
 { 
-    //delete readyList; 
     for (int i = 0 ; i < MAX_PRIORITY ; i++)
-		delete priorityArray[i];
-	
-	//free priorityArray ??????--------
+		delete readyList[i];
 } 
 
 //----------------------------------------------------------------------
@@ -67,8 +62,7 @@ Scheduler::ReadyToRun (Thread *thread)
     
     ASSERT(0 <= priority && priority < MAX_PRIORITY);
     
-    priorityArray[priority]->Append(thread);
-    //readyList->Append(thread);
+    readyList[priority]->Append(thread);
 }
 
 //----------------------------------------------------------------------
@@ -83,9 +77,13 @@ Thread *
 Scheduler::FindNextToRun ()
 {
 	for (int i = (MAX_PRIORITY - 1) ; i >= 0 ; i--)
-		if (!priorityArray[i]->IsEmpty())
-			return priorityArray[i]->Remove();
-    //return readyList->Remove();
+	{
+		if (!readyList[i]->IsEmpty())
+		{
+			return readyList[i]->Remove();
+		}
+	}
+	return NULL;
 }
 
 //----------------------------------------------------------------------
@@ -164,5 +162,40 @@ void
 Scheduler::Print()
 {
     printf("Ready list contents:\n");
-    readyList->Apply(ThreadPrint);
+    for (int i = 0; i < MAX_PRIORITY; i++)
+		if (!readyList[i]->IsEmpty())
+		{
+			printf("Threads with priority %d: ", i);
+			readyList[i]->Apply(ThreadPrint);
+			printf("\n");
+		}
+}
+
+void
+Scheduler::ChangePriority(Thread* thread)
+{
+	Thread *first, *temp;
+	
+	for (int i = 0; i < MAX_PRIORITY; i++)
+	{
+		if (!readyList[i]->IsEmpty())
+		{
+			first = readyList[i]->Remove();
+			readyList[i]->Append(first);
+			do
+			{
+				temp = readyList[i]->Remove();
+				if (thread != temp)
+				{
+					readyList[i]->Append(temp);
+				}
+			} while (temp != first);
+		}
+	}
+	
+	int priority = thread->getPriority();
+    
+    ASSERT(0 <= priority && priority < MAX_PRIORITY);
+    
+    readyList[priority]->Append(thread);
 }

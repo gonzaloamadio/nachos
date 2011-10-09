@@ -98,10 +98,11 @@ class Thread {
 						// overflowed its stack
 	void Join(Thread* child);
 	
-	int getPriority() {return threadPriority;}
-	void setPriority(int newPriority) {threadPriority = newPriority;}
+	int getPriority() { return threadPriority; }
+	void setPriority(int newPriority) { threadPriority = newPriority; }
+	int getInitialPriority() { return initialPriority; }
 	
-	Port* getPort(){return port;} // * para obtener el puerto del hijo en el join
+	Port* getPort() { return port; } // * para obtener el puerto del hijo en el join
 
     void setStatus(ThreadStatus st) { status = st; }
     const char* getName() { return (name); }
@@ -115,7 +116,7 @@ class Thread {
 					// (If NULL, don't deallocate stack)
     ThreadStatus status;		// ready, running or blocked
     const char* name;
-	int threadPriority;
+	int threadPriority, initialPriority;
     void StackAllocate(VoidFunctionPtr func, void* arg);
     					// Allocate a stack for thread.
 					// Used internally by Fork()

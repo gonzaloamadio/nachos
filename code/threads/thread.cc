@@ -42,6 +42,7 @@ Thread::Thread(const char* threadName, int join = 0, int priority = 0)
     status = JUST_CREATED;
     toBeJoined = join;
     threadPriority = priority;
+    initialPriority = priority;
     if (toBeJoined != 0)
 		port = new Port("Thread Port");
 #ifdef USER_PROGRAM
@@ -206,10 +207,17 @@ Thread::Yield ()
     DEBUG('t', "Yielding thread \"%s\"\n", getName());
     
     nextThread = scheduler->FindNextToRun();
+    
     if (nextThread != NULL) {
-	scheduler->ReadyToRun(this);
-	scheduler->Run(nextThread);
+		if (this->getPriority() <= nextThread->getPriority()) {
+			scheduler->ReadyToRun(this);
+			scheduler->Run(nextThread);
+		}
+		else {
+			scheduler->ReadyToRun(nextThread);
+		}
     }
+    
     interrupt->SetLevel(oldLevel);
 }
 

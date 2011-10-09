@@ -29,12 +29,12 @@ class Scheduler {
 					// list, if any, and return thread.
     void Run(Thread* nextThread);	// Cause nextThread to start running
     void Print();			// Print contents of ready list
+    void ChangePriority(Thread* thread);
     
   private:
-    List<Thread*> *readyList;
-      		// queue of threads that are ready to run,
+      		// array of threads that are ready to run,
 					// but not running
-	List<Thread*> *priorityArray[MAX_PRIORITY];
+	List<Thread*> *readyList[MAX_PRIORITY];
 };
 
 #endif // SCHEDULER_H

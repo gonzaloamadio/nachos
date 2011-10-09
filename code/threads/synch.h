@@ -87,8 +87,8 @@ class Lock {
 
   private:
     const char* name;				// para depuraci�n
-    Semaphore* lockSemaphore; // a�adir aqu� otros campos que sean necesarios
-    Thread* lockThread;
+    Semaphore* sem; // a�adir aqu� otros campos que sean necesarios
+    Thread* owner;
 };
 
 //  La siguiente clase define una "variable condici�n". Una variable condici�n
@@ -145,8 +145,8 @@ class Condition {
   private:
   // aqu� se a�aden otros campos que sean necesarios
     const char* name;
-    Lock *cvLock;   // * Lock pasado en el arg
-    List<Semaphore*> *cvSemList; // * Lista de threads durmiendo 
+    Lock *lock;   // * Lock pasado en el arg
+    List<Semaphore*> *semList; // * Lista de threads durmiendo 
 };
 
 /*
@@ -176,7 +176,6 @@ class Condition {
 */
 
 class Port {
-	
 	public:
 	
 		Port(const char *debugName);
@@ -188,11 +187,11 @@ class Port {
 	
 	private: 
 		const char *name;
-		Lock *srLock;
+		Lock *lock;
 		Condition *sendCondition;
 		Condition *receiveCondition;
 		int theMessage;
-		int sender, receiver;
+		int senders, receivers;
 		bool emptyMessage;
 };
 

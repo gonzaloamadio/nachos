@@ -101,121 +101,213 @@ Semaphore::V()
 // Dummy functions -- so we can compile our later assignments 
 // Note -- without a correct implementation of Condition::Wait(), 
 // the test case in the network assignment won't work!
+
+//----------------------------------------------------------------------
+// Lock::Lock
+//  Inicializamos el lock.
+//  
+//  "debugName" nombre arbitrario del lock
+//----------------------------------------------------------------------
+
 Lock::Lock(const char* debugName)
 {
-	name = debugName; 
-	lockSemaphore = new Semaphore("Lock Semaphore", 1); //Iniciamos el semaforo en 1 para que comienze libre
-	lockThread = NULL; // dejamos apuntando el thread a NULL para inicializarlo en algo
+	name = debugName;
+	// Inicializamos el semáforo en 1
+	sem = new Semaphore("Lock Semaphore", 1);
+	// Inicializamos el dueño en NULL
+	owner = NULL;
 }
+
+//----------------------------------------------------------------------
+// Lock::~Lock
+//  Liberamos el lock. Destruimos el semáforo.
+//----------------------------------------------------------------------
 Lock::~Lock()
 {
-	delete lockSemaphore;
+	delete sem;
 }
+
+//----------------------------------------------------------------------
+// Lock::Acquire
+//  
+//----------------------------------------------------------------------
 void Lock::Acquire() 
-{                                     // Lo hacemos con assert para que tire un error apropiado.
-	ASSERT(!isHeldByCurrentThread()); //Nos fijamos que no haya acquire anidado, para que no lo vuelva a poner en la cola
-	lockSemaphore->P(); // Decrementamos el valor del semaforo, si no es el currentThread , P() lo manda a dormir
-	lockThread = currentThread;  // Si viene otro proceso que no es el que tiene el cerrojo, es mandado a dormir y no se ejecuta esta sentencia.
-	DEBUG('t', "\"%s\" is currently holding \"%s\"\n", lockThread->getName(), getName());
+{
+	// Hacemos ASSERT para evitar Acquires anidados
+	ASSERT(!isHeldByCurrentThread());
+	
+	if (owner != NULL)
+	{
+		if (owner->getPriority() < currentThread->getPriority())
+		{
+			owner->setPriority(currentThread->getPriority());
+			scheduler->ChangePriority(owner);
+			DEBUG('t', "\"%s\" now has priority \"%d\"\n", 
+				owner->getName(), owner->getPriority());
+		}
+	}
+	
+	// Hacemos P. Si está libre el currentThread toma el lock. Sino, el
+	// currentThread se va a dormir
+	sem->P();
+	
+	// Seteamos el dueño del lock
+	owner = currentThread;
+	
+	DEBUG('t', "\"%s\" is currently holding \"%s\"\n", owner->getName(), 
+		getName());
 }
+
+//----------------------------------------------------------------------
+// Lock::Release
+//  
+//----------------------------------------------------------------------
 void Lock::Release()
 {
+	// Hacemos ASSERT para chequear que el Release lo hace el hilo dueño
 	ASSERT(isHeldByCurrentThread());
-	DEBUG('t', "\"%s\" has released \"%s\"\n", lockThread->getName(), getName());
-	lockThread = NULL;  // Es importante hacer esto antes de V(). Si lo pongo después de liberar el lock
-	                    // puede haber cambio de contexto y pisar que thread tiene el lock.
-	lockSemaphore->V(); // Si es el hilo actual, lo removemos de la cola, lo dejamos en estado listo con V().
+	DEBUG('t', "\"%s\" has released \"%s\"\n", owner->getName(), 
+		getName());
+	
+	if (owner->getInitialPriority() != owner->getPriority())
+	{
+		owner->setPriority(owner->getInitialPriority());
+		DEBUG('t', "\"%s\" has returned to its original priority \"%d\"\n", 
+			owner->getName(), owner->getPriority());
+	}
+	
+	// Seteamos el dueño en NULL. Lo hacemos antes de liberar el lock,
+	// ya que si no lo hacemos puede haber cambio de contexto y
+	// ejecutarse luego de que alguien tome el lock. 
+	owner = NULL;
+	
+	// Liberamos el lock. Incrementamos el semáforo y despertamos a
+	// algún hilo que se haya bloqueado con Acquire
+	sem->V();
 }
+
+//----------------------------------------------------------------------
+// Lock::isHeldByCurrentThread
+//  Devolvemos true si el hilo actual tiene el lock.
+//----------------------------------------------------------------------
 bool Lock::isHeldByCurrentThread()
 {
-	return (currentThread == lockThread);
+	return (currentThread == owner);
 }
+
+//----------------------------------------------------------------------
+// Condition::Condition
+//  Inicializamos la variable de condición.
+//  
+//  "debugName" nombre arbitrario de la variable de la condición
+//  "conditionLock" lock que va a usar la variable de condición
+//----------------------------------------------------------------------
 
 Condition::Condition(const char* debugName, Lock* conditionLock)
 {
 	name = debugName;
-	cvLock = conditionLock;
-	cvSemList = new List<Semaphore*>;
+	lock = conditionLock;
+	semList = new List<Semaphore*>;
 }
 Condition::~Condition()
 {
-	cvLock = NULL;
-	delete cvSemList;
+	lock = NULL;
+	delete semList;
 }
 void Condition::Wait()
 {
 	Semaphore* sem;
-	ASSERT(cvLock->isHeldByCurrentThread());
+	// ASSERT para chequear que el Wait lo llame el dueño del lock
+	ASSERT(lock->isHeldByCurrentThread());
+	
+	// Creamos el semáforo para bloquear al dueño de lock
 	sem = new Semaphore("CV Semaphore", 0);
-	cvSemList->Append(sem);
-	cvLock->Release();
+	semList->Append(sem);
+	// Liberamos el lock
+	lock->Release();
+	// Bloqueamos al dueño de lock y luego liberamos la memoria del sem.
 	sem->P();
 	delete sem;
-	cvLock->Acquire();
+	// Al despertarse, el hilo vuelve a tomar el lock
+	lock->Acquire();
 }
 void Condition::Signal()
 {
 	Semaphore* sem;
-	ASSERT(cvLock->isHeldByCurrentThread());
-	if (!cvSemList->IsEmpty())
+	ASSERT(lock->isHeldByCurrentThread());
+	// Despertamos el hilo del primer semáforo
+	if (!semList->IsEmpty())
 	{
-		sem = cvSemList->Remove();
+		sem = semList->Remove();
 		sem->V();
 	}
 }
 void Condition::Broadcast()
 {
 	Semaphore* sem;
-	ASSERT(cvLock->isHeldByCurrentThread());
-	while (!cvSemList->IsEmpty())  // Recorremos toda la lista, vamos removiendo los hilos y
-	{                            // dejandolos en estado listos para correr. 
-		sem = cvSemList->Remove();
+	ASSERT(lock->isHeldByCurrentThread());
+	// Recorremos la lista de semáforos y despertamos a todos los hilos
+	while (!semList->IsEmpty())
+	{
+		sem = semList->Remove();
 		sem->V();
 	}
 }
 
+//----------------------------------------------------------------------
+// Port::Port
+//  Inicializamos el puerto.
+//  
+//  "debugName" nombre arbitrario del puerto
+//----------------------------------------------------------------------
+
 Port::Port(const char *debugName)
 {
 	name = debugName;
-	sender = 0;
-	receiver = 0;
-	srLock = new Lock("Port Lock");
-	sendCondition = new Condition("Port sendCondition",srLock);
-	receiveCondition = new Condition("Port receiveCondition",srLock);
+	senders = 0;
+	receivers = 0;
+	lock = new Lock("Port Lock");
+	sendCondition = new Condition("Port sendCondition", lock);
+	receiveCondition = new Condition("Port receiveCondition", lock);
 	emptyMessage = true;
 }
+
+//----------------------------------------------------------------------
+// Port::~Port
+//  Liberamos el puerto. Destruimos todo las VdC y el lock.
+//----------------------------------------------------------------------
 
 Port::~Port()
 {
 	delete sendCondition;
 	delete receiveCondition;
-	delete srLock;
+	delete lock;
 }
 
 void Port::Send(int message)
 {
-	srLock->Acquire();
-	sender++;
-	while (receiver == 0 || (emptyMessage == false)) // para no sobreescribir un msj existente
+	lock->Acquire();
+	senders++;
+	while (receivers == 0 || !emptyMessage) // para no sobreescribir un msj existente
 		sendCondition->Wait();	
-	receiver--;
+	receivers--;
 	theMessage = message;
 	emptyMessage = false;
 	receiveCondition->Signal();
-	srLock->Release();
+	lock->Release();
 }
 
 
 void Port::Receive(int *message)
 {
-	srLock->Acquire();
-	receiver++;
+	lock->Acquire();
+	receivers++;
 	sendCondition->Signal();
-	while (sender == 0 || emptyMessage)
+	while (senders == 0 || emptyMessage)
 		receiveCondition->Wait();	
-	sender--;
+	senders--;
 	*message = theMessage;
 	emptyMessage = true;
 	sendCondition->Signal();
-	srLock->Release();
+	lock->Release();
 }

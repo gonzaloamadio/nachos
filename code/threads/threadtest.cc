@@ -107,77 +107,6 @@ LockTest()
     lockTaker((void*)theLock);
 }
 
-/*
-List<int> buffer;
-int tamBuff = 0;
-int maxBuff = 5;
-
-int vecesP = 50;
-int vecesC = 50;
-
-Lock* lockCV = new Lock("Test Lock CV");
-Condition* emptyCV = new Condition("Empty CV", lockCV);
-Condition* fullCV = new Condition("Full CV", lockCV);
-
-void productor(void* name)
-{
-	lockCV->Acquire();
-	while (true)
-	{
-		if (tamBuff == maxBuff)
-		{
-			fullCV->Wait();
-		}
-		buffer.Append(1);
-		tamBuff++;
-		printf("%s (%d)\n", (char*) name, tamBuff);
-		if (tamBuff == 1)
-		{
-			emptyCV->Signal();
-		}
-	}
-}
-
-void consumidor(void* name)
-{
-	lockCV->Acquire();
-	while (true)
-	{
-		if (tamBuff == 0)
-		{
-			emptyCV->Wait();
-		}
-		ASSERT(buffer.Remove() != NULL);
-		tamBuff--;
-		printf("%s (%d)\n", (char*) name, tamBuff);
-		if (tamBuff == maxBuff - 1)
-		{
-			fullCV->Signal();
-		}
-	}
-}
-
-void CVTest()
-{
-	DEBUG('t', "Entering CV Test");
-	
-	for (int i = 1; i <= 3; i++)
-	{
-		char* threadname = new char[100];
-		sprintf(threadname, "Consumidor %d", i);
-		Thread* newThread = new Thread(threadname,0);
-		newThread->Fork(consumidor, (void*) threadname);
-	}
-	for (int i = 1; i <= 3; i++)
-	{
-		char* threadname = new char[100];
-		sprintf(threadname, "Productor %d", i);
-		Thread* newThread = new Thread(threadname,0);
-		newThread->Fork(productor, (void*) threadname);
-	}
-}
-*/
-
 Port *puerto = new Port("Test Port");
 
 void PortTester(void *n)
@@ -321,7 +250,7 @@ void
 ForkerThread()
 {
   Thread *joiner = new Thread("joiner", 0,4);  // will not be joined
-  Thread *joinee = new Thread("joinee", 1,1);  // WILL be joined
+  Thread *joinee = new Thread("joinee", 1,6);  // WILL be joined
 
   // fork off the two threads and let them do their business
   joiner->Fork((VoidFunctionPtr) Joiner, (void*) joinee);
@@ -331,4 +260,59 @@ ForkerThread()
   printf("Forked off the joiner and joiner threads.\n");
 }
 
+int priorityTest = 0;
 
+void
+highPriority(void* arg)
+{
+	Lock* lock = (Lock*) arg;
+	
+	lock->Acquire();
+	
+	if (priorityTest != 0)
+		printf("Success!\n");
+		
+	lock->Release();
+}
+
+void
+medPriority(void* arg)
+{
+	currentThread->Yield();
+	currentThread->Yield();
+	//while (true);
+		//currentThread->Yield();
+}
+
+void
+lowPriority(void* arg)
+{
+	Thread *high = new Thread("High Priority Thread", 0, 9);
+	Thread *high2 = new Thread("High2 Priority Thread", 0, 9);
+	Thread *med = new Thread("Med Priority Thread", 0, 5);
+	
+	Lock* lock = (Lock*) arg;
+	
+	lock->Acquire();
+	
+	high->Fork(highPriority, (void*) lock);
+	med->Fork(medPriority, (void*) lock);
+	high2->Fork(highPriority, (void*) lock);
+	
+	currentThread->Yield();
+	
+	priorityTest++;
+	printf("priorityTest + 1\n");
+	
+	lock->Release();
+}
+
+void
+PriorityTest()
+{
+	Thread *low = new Thread("Low Priority Thread", 0, 0);
+	
+	Lock *lock = new Lock("Priority Lock");
+	
+	low->Fork(lowPriority, (void*) lock); 
+}
