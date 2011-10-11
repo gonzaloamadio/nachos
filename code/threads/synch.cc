@@ -106,7 +106,7 @@ Semaphore::V()
 // Lock::Lock
 //  Inicializamos el lock.
 //  
-//  "debugName" nombre arbitrario del lock
+//  "debugName" nombre arbitrario del lock.
 //----------------------------------------------------------------------
 
 Lock::Lock(const char* debugName)
@@ -122,6 +122,7 @@ Lock::Lock(const char* debugName)
 // Lock::~Lock
 //  Liberamos el lock. Destruimos el semáforo.
 //----------------------------------------------------------------------
+
 Lock::~Lock()
 {
 	delete sem;
@@ -129,13 +130,20 @@ Lock::~Lock()
 
 //----------------------------------------------------------------------
 // Lock::Acquire
-//  
+//  El hilo adquiere el lock. Si el lock ya está tomado, mandamos a
+//  dormir el hilo que trata de tomarlo a través del semáforo.
+//  Además, si el lock está tomado por el hilo owner y un nuevo hilo
+//  con mayor prioridad trata de tomar el lock, hacemos inversión de 
+//  prioridades. 
 //----------------------------------------------------------------------
+
 void Lock::Acquire() 
 {
-	// Hacemos ASSERT para evitar Acquires anidados
+	// Hacemos ASSERT para evitar Acquires anidados.
 	ASSERT(!isHeldByCurrentThread());
 	
+	// Si el hilo dueño tiene menor prioridad, le damos la prioridad del
+	// hilo actual y cambiamos su lugar en la multicola del scheduler.
 	if (owner != NULL)
 	{
 		if (owner->getPriority() < currentThread->getPriority())
@@ -148,10 +156,10 @@ void Lock::Acquire()
 	}
 	
 	// Hacemos P. Si está libre el currentThread toma el lock. Sino, el
-	// currentThread se va a dormir
+	// currentThread se va a dormir.
 	sem->P();
 	
-	// Seteamos el dueño del lock
+	// Seteamos el dueño del lock.
 	owner = currentThread;
 	
 	DEBUG('t', "\"%s\" is currently holding \"%s\"\n", owner->getName(), 
@@ -160,8 +168,11 @@ void Lock::Acquire()
 
 //----------------------------------------------------------------------
 // Lock::Release
-//  
+//  El hilo dueño libera el lock.
+//  Si hubo inversión de prioridades, seteamos la prioridad del hilo
+//  dueño a la inicial.
 //----------------------------------------------------------------------
+
 void Lock::Release()
 {
 	// Hacemos ASSERT para chequear que el Release lo hace el hilo dueño
@@ -169,6 +180,9 @@ void Lock::Release()
 	DEBUG('t', "\"%s\" has released \"%s\"\n", owner->getName(), 
 		getName());
 	
+	// Si la prioridad inicial del hilo dueño es distinta a la actual,
+	// hubo inversión de prioridades y hacemos que la prioridad del hilo
+	// vuelva a la inicial. 
 	if (owner->getInitialPriority() != owner->getPriority())
 	{
 		owner->setPriority(owner->getInitialPriority());
@@ -178,11 +192,11 @@ void Lock::Release()
 	
 	// Seteamos el dueño en NULL. Lo hacemos antes de liberar el lock,
 	// ya que si no lo hacemos puede haber cambio de contexto y
-	// ejecutarse luego de que alguien tome el lock. 
+	// ejecutarse luego de que alguien tome el lock.
 	owner = NULL;
 	
 	// Liberamos el lock. Incrementamos el semáforo y despertamos a
-	// algún hilo que se haya bloqueado con Acquire
+	// algún hilo que se haya bloqueado con Acquire.
 	sem->V();
 }
 
@@ -190,6 +204,7 @@ void Lock::Release()
 // Lock::isHeldByCurrentThread
 //  Devolvemos true si el hilo actual tiene el lock.
 //----------------------------------------------------------------------
+
 bool Lock::isHeldByCurrentThread()
 {
 	return (currentThread == owner);
@@ -199,8 +214,8 @@ bool Lock::isHeldByCurrentThread()
 // Condition::Condition
 //  Inicializamos la variable de condición.
 //  
-//  "debugName" nombre arbitrario de la variable de la condición
-//  "conditionLock" lock que va a usar la variable de condición
+//  "debugName" nombre arbitrario de la variable de la condición.
+//  "conditionLock" lock que va a usar la variable de condición.
 //----------------------------------------------------------------------
 
 Condition::Condition(const char* debugName, Lock* conditionLock)
@@ -209,44 +224,72 @@ Condition::Condition(const char* debugName, Lock* conditionLock)
 	lock = conditionLock;
 	semList = new List<Semaphore*>;
 }
+
+//----------------------------------------------------------------------
+// Condition::~Condition
+//  Liberamos la variable de condición. Destruimos la lista de
+//  semáforos.
+//----------------------------------------------------------------------
+
 Condition::~Condition()
 {
 	lock = NULL;
 	delete semList;
 }
+
+//----------------------------------------------------------------------
+// Condition::Wait
+//  Bloqueamos al dueño del lock con el semáforo creado. Luego al salir
+//  de P(), el hilo vuelve a tomar el lock.
+//----------------------------------------------------------------------
+
 void Condition::Wait()
 {
 	Semaphore* sem;
-	// ASSERT para chequear que el Wait lo llame el dueño del lock
+	// ASSERT para chequear que el Wait lo llame el dueño del lock.
 	ASSERT(lock->isHeldByCurrentThread());
 	
-	// Creamos el semáforo para bloquear al dueño de lock
+	// Creamos el semáforo para bloquear al dueño de lock.
 	sem = new Semaphore("CV Semaphore", 0);
 	semList->Append(sem);
-	// Liberamos el lock
+	// Liberamos el lock.
 	lock->Release();
 	// Bloqueamos al dueño de lock y luego liberamos la memoria del sem.
 	sem->P();
 	delete sem;
-	// Al despertarse, el hilo vuelve a tomar el lock
+	// Al despertarse, el hilo vuelve a tomar el lock.
 	lock->Acquire();
 }
+
+//----------------------------------------------------------------------
+// Condition::Signal
+//  Despertamos al hilo del primer semáforo de la lista, mandado a
+//  dormir con P() en Wait.
+//----------------------------------------------------------------------
+
 void Condition::Signal()
 {
 	Semaphore* sem;
 	ASSERT(lock->isHeldByCurrentThread());
-	// Despertamos el hilo del primer semáforo
+	// Despertamos el hilo del primer semáforo.
 	if (!semList->IsEmpty())
 	{
 		sem = semList->Remove();
 		sem->V();
 	}
 }
+
+//----------------------------------------------------------------------
+// Condition::Broadcast
+//  Despertamos a todos los hilos de todos los semáforos de la lista,
+//  mandados a dormir con P() en Wait.
+//----------------------------------------------------------------------
+
 void Condition::Broadcast()
 {
 	Semaphore* sem;
 	ASSERT(lock->isHeldByCurrentThread());
-	// Recorremos la lista de semáforos y despertamos a todos los hilos
+	// Recorremos la lista de semáforos y despertamos a todos los hilos.
 	while (!semList->IsEmpty())
 	{
 		sem = semList->Remove();
@@ -258,7 +301,7 @@ void Condition::Broadcast()
 // Port::Port
 //  Inicializamos el puerto.
 //  
-//  "debugName" nombre arbitrario del puerto
+//  "debugName" nombre arbitrario del puerto.
 //----------------------------------------------------------------------
 
 Port::Port(const char *debugName)
@@ -266,48 +309,89 @@ Port::Port(const char *debugName)
 	name = debugName;
 	senders = 0;
 	receivers = 0;
-	lock = new Lock("Port Lock");
-	sendCondition = new Condition("Port sendCondition", lock);
-	receiveCondition = new Condition("Port receiveCondition", lock);
 	emptyMessage = true;
+	// Lock y Variables de Condición
+	lock = new Lock("Port Lock");
+	senderCondition = new Condition("Port Sender Condition", lock);
+	receiverCondition = new Condition("Port Receiver Condition", lock);
 }
 
 //----------------------------------------------------------------------
 // Port::~Port
-//  Liberamos el puerto. Destruimos todo las VdC y el lock.
+//  Liberamos el puerto. Destruimos todas las variables de condición y
+//  el lock.
 //----------------------------------------------------------------------
 
 Port::~Port()
 {
-	delete sendCondition;
-	delete receiveCondition;
+	delete senderCondition;
+	delete receiverCondition;
 	delete lock;
 }
+
+//----------------------------------------------------------------------
+// Port::Send
+//  Mandamos el mensaje. Adquirimos el lock, avisamos que hay un emisor;
+//  si no podemos enviar, esperamos. Cuando sea posible enviar, enviamos
+//  y avisamos a un receptor. Luego, liberamos el lock.
+//
+//  "message" contendrá el mensaje a ser enviado.
+//----------------------------------------------------------------------
 
 void Port::Send(int message)
 {
 	lock->Acquire();
+	
+	// Incrementamos senders para avisar que hay un emisor.
 	senders++;
-	while (receivers == 0 || !emptyMessage) // para no sobreescribir un msj existente
-		sendCondition->Wait();	
+	// Mientras que no haya receptores o haya un mensaje en el buffer,
+	// el emisor espera con senderCondition.
+	while (receivers == 0 || !emptyMessage)
+		senderCondition->Wait();
+	// Salimos del while, entonces podemos enviar.
+	// Decrementamos receivers porque el receptor recibirá el mensaje. 
 	receivers--;
-	theMessage = message;
+	// Copiamos el mensaje en el buffer.
+	buffer = message;
+	// Avisamos que hay un mensaje en el buffer.
 	emptyMessage = false;
-	receiveCondition->Signal();
+	// Despertamos a un receptor.
+	receiverCondition->Signal();
+	
 	lock->Release();
 }
 
+//----------------------------------------------------------------------
+// Port::Receive
+//  Recibimos el mensaje. Adquirimos el lock, avisamos que hay un
+//  receptor y despertamos a algún emisor; si no podemos recibir,
+//  esperamos. Cuando sea posible, recibimos el mensaje, lo copiamos en
+//  en message y avisamos a un emisor. Luego, liberamos el lock.
+//
+//  "*message" contendrá el mensaje recibido.
+//----------------------------------------------------------------------
 
 void Port::Receive(int *message)
 {
 	lock->Acquire();
+	
+	// Incrementamos receivers para avisar que hay un receptor.
 	receivers++;
-	sendCondition->Signal();
+	// Despertamos a un emisor porque hay un receptor.
+	senderCondition->Signal();
+	// Mientras que no haya emisores o no haya un mensaje en el buffer,
+	// el receptor espera con receiverCondition.
 	while (senders == 0 || emptyMessage)
-		receiveCondition->Wait();	
+		receiverCondition->Wait();
+	// Salimos del while, entonces podemos recibir.
+	// Decrementamos senders porque el emisor envió el mensaje.
 	senders--;
-	*message = theMessage;
+	// Copiamos el mensaje del buffer en message.
+	*message = buffer;
+	// Avisamos que el buffer está vacío.
 	emptyMessage = true;
-	sendCondition->Signal();
+	// Despertamos a algún emisor para que siga mandando mensajes.
+	senderCondition->Signal();
+	
 	lock->Release();
 }

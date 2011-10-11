@@ -29,7 +29,7 @@
 
 Scheduler::Scheduler()
 { 
-    for(int i=0; i < MAX_PRIORITY ;i++)
+    for (int i = 0; i < MAX_PRIORITY; i++)
 		readyList[i] = new List<Thread*>;
 } 
 
@@ -40,7 +40,7 @@ Scheduler::Scheduler()
 
 Scheduler::~Scheduler()
 { 
-    for (int i = 0 ; i < MAX_PRIORITY ; i++)
+    for (int i = 0; i < MAX_PRIORITY; i++)
 		delete readyList[i];
 } 
 
@@ -58,10 +58,12 @@ Scheduler::ReadyToRun (Thread *thread)
     DEBUG('t', "Putting thread %s on ready list.\n", thread->getName());
 
 	thread->setStatus(READY);
+	
+	// Obtenemos la prioridad del hilo
 	int priority = thread->getPriority();
-    
+    // Verificamos que la prioridad sea válida.
     ASSERT(0 <= priority && priority < MAX_PRIORITY);
-    
+    // Insertamos el hilo en la cola correspondiente a su prioridad.
     readyList[priority]->Append(thread);
 }
 
@@ -76,10 +78,11 @@ Scheduler::ReadyToRun (Thread *thread)
 Thread *
 Scheduler::FindNextToRun ()
 {
-	for (int i = (MAX_PRIORITY - 1) ; i >= 0 ; i--)
+	for (int i = (MAX_PRIORITY - 1); i >= 0; i--)
 	{
 		if (!readyList[i]->IsEmpty())
 		{
+			// Devolvemos el hilo con mayor prioridad.
 			return readyList[i]->Remove();
 		}
 	}
@@ -163,19 +166,28 @@ Scheduler::Print()
 {
     printf("Ready list contents:\n");
     for (int i = 0; i < MAX_PRIORITY; i++)
+    {
 		if (!readyList[i]->IsEmpty())
 		{
 			printf("Threads with priority %d: ", i);
 			readyList[i]->Apply(ThreadPrint);
 			printf("\n");
 		}
+	}
 }
+
+//----------------------------------------------------------------------
+// Scheduler::ChangePriority
+// 	Cambiamos de cola al thread de acuerdo a su prioridad.
+//----------------------------------------------------------------------
 
 void
 Scheduler::ChangePriority(Thread* thread)
 {
 	Thread *first, *temp;
 	
+	// Buscamos el thread dentro de cada lista; al encontrarlo,
+	// lo sacamos.
 	for (int i = 0; i < MAX_PRIORITY; i++)
 	{
 		if (!readyList[i]->IsEmpty())
@@ -193,9 +205,9 @@ Scheduler::ChangePriority(Thread* thread)
 		}
 	}
 	
+	// Obtenemos y verificamos la prioridad de thread.
 	int priority = thread->getPriority();
-    
-    ASSERT(0 <= priority && priority < MAX_PRIORITY);
-    
-    readyList[priority]->Append(thread);
+	ASSERT(0 <= priority && priority < MAX_PRIORITY);
+	// Insertamos thread en la cola correspondiente a su prioridad.
+	readyList[priority]->Append(thread);
 }

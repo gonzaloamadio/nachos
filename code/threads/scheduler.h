@@ -29,11 +29,11 @@ class Scheduler {
 					// list, if any, and return thread.
     void Run(Thread* nextThread);	// Cause nextThread to start running
     void Print();			// Print contents of ready list
+    // Cambiamos de lista al hilo de acuerdo a su prioridad.
     void ChangePriority(Thread* thread);
     
   private:
-      		// array of threads that are ready to run,
-					// but not running
+	// List of threads that are ready to run, but not running
 	List<Thread*> *readyList[MAX_PRIORITY];
 };
 

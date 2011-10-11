@@ -98,11 +98,13 @@ class Thread {
 						// overflowed its stack
 	void Join(Thread* child);
 	
+	// Funciones para manejar prioridades.
 	int getPriority() { return threadPriority; }
 	void setPriority(int newPriority) { threadPriority = newPriority; }
 	int getInitialPriority() { return initialPriority; }
 	
-	Port* getPort() { return port; } // * para obtener el puerto del hijo en el join
+	// Para obtener el puerto del hilo, a usarse en Thread::Join.
+	Port* getPort() { return port; }
 
     void setStatus(ThreadStatus st) { status = st; }
     const char* getName() { return (name); }
@@ -116,12 +118,15 @@ class Thread {
 					// (If NULL, don't deallocate stack)
     ThreadStatus status;		// ready, running or blocked
     const char* name;
-	int threadPriority, initialPriority;
     void StackAllocate(VoidFunctionPtr func, void* arg);
     					// Allocate a stack for thread.
 					// Used internally by Fork()
+	// Variable para indicar si se hará Join sobre el hilo.
 	int toBeJoined;
-	Port* port;
+	// Puerto para comunicar si el hilo terminó.
+	Port *port;
+	// Prioridades del hilo.
+	unsigned int threadPriority, initialPriority;
 
 #ifdef USER_PROGRAM
 // A thread running a user program actually has *two* sets of CPU registers -- 

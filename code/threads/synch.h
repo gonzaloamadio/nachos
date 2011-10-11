@@ -177,7 +177,6 @@ class Condition {
 
 class Port {
 	public:
-	
 		Port(const char *debugName);
 		~Port();
 		const char* getName() { return (name); }
@@ -187,12 +186,18 @@ class Port {
 	
 	private: 
 		const char *name;
-		Lock *lock;
-		Condition *sendCondition;
-		Condition *receiveCondition;
-		int theMessage;
-		int senders, receivers;
+		// Buffer que contendrá el mensaje.
+		int buffer;
+		// Variable booleana para saber si el buffer está vacío
+		// true = vacío, false = lleno
 		bool emptyMessage;
+		// Senders y Receivers dirán si hay emisores y/o receptores
+		// en espera.
+		int senders, receivers;
+		// Locks y Variables de Condición
+		Lock *lock;
+		Condition *senderCondition;
+		Condition *receiverCondition;
 };
 
 #endif // SYNCH_H

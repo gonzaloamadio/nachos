@@ -20,7 +20,10 @@
 #include "synch.h"
 #include "system.h"
 
-List<Thread*> * procList = new List<Thread*>; // * lista de procesos creados , en el fork se lo vamos metiendo
+// Lista de hilos presentes en el sistema. Agregamos hilos a lista en
+// Thread::Fork, porque es aquí donde se pone a los procesos en el
+// scheduler.
+List<Thread*> *procList = new List<Thread*>;
 
 // this is put at the top of the execution stack,
 // for detecting stack overflows
@@ -108,6 +111,7 @@ Thread::Fork(VoidFunctionPtr func, void* arg)
     IntStatus oldLevel = interrupt->SetLevel(IntOff);
     scheduler->ReadyToRun(this);	// ReadyToRun assumes that interrupts 
 					// are disabled!
+	// Agregamos a este hilo a la lista procList.
 	procList->Append(this);
     interrupt->SetLevel(oldLevel);
 }    
@@ -159,10 +163,13 @@ Thread::Finish ()
     
     DEBUG('t', "Finishing thread \"%s\"\n", getName());
     
+    // Si se va a hacer un Join sobre el hilo, ejecutamos Send sobre el
+	// puerto del hilo. 
     if (toBeJoined != 0)
 		port->Send(0);
 	
-	Thread *first, *temp; // * para saber cuando parar de recorre procList
+	// Removemos el hilo de la lista de procesos procList
+	Thread *first, *temp;
 	first = procList->Remove();
 	procList->Append(first);
 	
@@ -209,11 +216,15 @@ Thread::Yield ()
     nextThread = scheduler->FindNextToRun();
     
     if (nextThread != NULL) {
+		// Si la prioridad del próximo hilo a poner en la CPU es menor
+		// a la del hilo actual, sigue ejecutando el hilo actual.
 		if (this->getPriority() <= nextThread->getPriority()) {
 			scheduler->ReadyToRun(this);
 			scheduler->Run(nextThread);
 		}
 		else {
+			// Como la prioridad del próximo hilo es menor, no lo
+			// ponemos en la CPU y lo volvemos a colocar en el scheduler.
 			scheduler->ReadyToRun(nextThread);
 		}
     }
@@ -340,10 +351,24 @@ Thread::RestoreUserState()
 }
 #endif
 
+//----------------------------------------------------------------------
+// Thread::Join
+//	Nos bloqueamos hasta que child termine.
+//  Recorremos la procList, si child se encuentra en ella nos bloqueamos
+//  hasta que el child termine.
+//
+//  "child" hilo sobre el que hacemos el Join.
+//----------------------------------------------------------------------
+
 void
 Thread::Join(Thread* child)
 {
-	Thread* first, *temp; // * para saber cuando parar de recorre procList
+	// Recorremos la lista de procesos procList para saber si el child
+	// es un hilo presente en el sistema.
+	Thread *first, *temp;
+	// Sacamos el primer hilo de la lista y lo ponemos al final, y
+	// conservamos el puntero para saber cuando parar de recorrer la
+	// lista de procesos.
 	first = procList->Remove();
 	procList->Append(first);
 	
@@ -356,11 +381,21 @@ Thread::Join(Thread* child)
 		}
 		else
 		{
+			// Encontramos el child en la lista.
 			procList->Append(temp);
-			int msj;
-			Port * joinPort = child->getPort(); 
-			joinPort->Receive(&msj);
-			delete joinPort; // el padre libera el port, si lo hace el hijo en su destructor el scheduler borra el puerto antes que termine el receive
+			int msg;
+			// Obtenemos el puerto del hijo.
+			Port *joinPort = child->getPort();
+			// Hacemos Receive sobre el puerto del hijo. Como la llamada
+			// es bloqueante, el hilo que llama al Join se bloquea y
+			// recién cuando se produzca el Send se desbloqueará. Esto
+			// ocurrira solo cuando el child termine de ejecutarse, ya
+			// que la llamada a Send la colocamos en Thread::Finish.
+			joinPort->Receive(&msg);
+			// El padre libera el puerto del hijo. Si esto se hiciera en
+			// el destructor del hijo, corremos el riesgo que se borre
+			// el puerto antes que volvamos del Receive.
+			delete joinPort;
 			return;
 		}
 	} while (temp != first);
