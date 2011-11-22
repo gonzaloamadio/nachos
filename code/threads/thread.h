@@ -44,6 +44,9 @@ class Port;
 #ifdef USER_PROGRAM
 #include "machine.h"
 #include "addrspace.h"
+#include "openfile.h"
+#include "syscall.h"
+#define FDTABLE_SIZE 256
 #endif
 
 // CPU register state to be saved on context switch.  
@@ -96,12 +99,14 @@ class Thread {
     
     void CheckOverflow();   			// Check if thread has 
 						// overflowed its stack
-	void Join(Thread* child);
+	int Join(Thread* child);
 	
 	// Funciones para manejar prioridades.
 	int getPriority() { return threadPriority; }
 	void setPriority(int newPriority) { threadPriority = newPriority; }
 	int getInitialPriority() { return initialPriority; }
+	
+	void setExitStatus(int st) { exitStatus = st; }
 	
 	// Para obtener el puerto del hilo, a usarse en Thread::Join.
 	Port* getPort() { return port; }
@@ -127,6 +132,7 @@ class Thread {
 	Port *port;
 	// Prioridades del hilo.
 	unsigned int threadPriority, initialPriority;
+	int exitStatus;
 
 #ifdef USER_PROGRAM
 // A thread running a user program actually has *two* sets of CPU registers -- 
@@ -134,12 +140,15 @@ class Thread {
 // while executing kernel code.
 
     int userRegisters[NumTotalRegs];	// user-level CPU register state
-
+	OpenFile *fdTable[FDTABLE_SIZE];
   public:
     void SaveUserState();		// save user-level register state
     void RestoreUserState();		// restore user-level register state
 
     AddrSpace *space;			// User code this thread is running.
+    OpenFile *getFD(OpenFileId num);
+    OpenFileId createFD(OpenFile * op);
+    void removeFD(OpenFileId num);
 #endif
 };
 

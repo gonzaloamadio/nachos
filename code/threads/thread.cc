@@ -46,10 +46,15 @@ Thread::Thread(const char* threadName, int join = 0, int priority = 0)
     toBeJoined = join;
     threadPriority = priority;
     initialPriority = priority;
+    exitStatus = 0;
     if (toBeJoined != 0)
 		port = new Port("Thread Port");
 #ifdef USER_PROGRAM
     space = NULL;
+    for (int i = 0; i < FDTABLE_SIZE; i++)
+    {
+		fdTable[i] = NULL;
+	}
 #endif
 }
 
@@ -166,7 +171,7 @@ Thread::Finish ()
     // Si se va a hacer un Join sobre el hilo, ejecutamos Send sobre el
 	// puerto del hilo. 
     if (toBeJoined != 0)
-		port->Send(0);
+		port->Send(exitStatus);
 	
 	// Removemos el hilo de la lista de procesos procList
 	Thread *first, *temp;
@@ -349,6 +354,28 @@ Thread::RestoreUserState()
     for (int i = 0; i < NumTotalRegs; i++)
 	machine->WriteRegister(i, userRegisters[i]);
 }
+
+OpenFile*
+Thread::getFD(OpenFileId num)
+{
+	return fdTable[num];
+}
+
+OpenFileId
+Thread::createFD(OpenFile * op)
+{
+	int i = 2;
+	while (fdTable[i] != NULL) i++;
+	fdTable[i] = op;
+	return i;
+}
+
+void
+Thread::removeFD(OpenFileId num)
+{
+	delete fdTable[num];
+	fdTable[num] = NULL;
+}
 #endif
 
 //----------------------------------------------------------------------
@@ -360,7 +387,7 @@ Thread::RestoreUserState()
 //  "child" hilo sobre el que hacemos el Join.
 //----------------------------------------------------------------------
 
-void
+int
 Thread::Join(Thread* child)
 {
 	// Recorremos la lista de procesos procList para saber si el child
@@ -396,8 +423,9 @@ Thread::Join(Thread* child)
 			// el destructor del hijo, corremos el riesgo que se borre
 			// el puerto antes que volvamos del Receive.
 			delete joinPort;
-			return;
+			return msg;
 		}
 	} while (temp != first);
+	return -1;
 }
 

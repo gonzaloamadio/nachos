@@ -24,6 +24,14 @@
 #include "copyright.h"
 #include "system.h"
 #include "syscall.h"
+#include "openfile.h"
+#include "synchconsole.h"
+
+void ReadString(int addr, char *buffer);
+void ReadBuffer(int addr, char *buffer, int size);
+void WriteBuffer(int addr, char *buffer, int size);
+void UpdateProgramCounter();
+void newThreadExec(void* arg);
 
 //----------------------------------------------------------------------
 // ExceptionHandler
@@ -51,13 +59,174 @@
 void
 ExceptionHandler(ExceptionType which)
 {
-    int type = machine->ReadRegister(2);
+	// En el registro r2 está el código de la system call
+    int type = machine->ReadRegister(2); 
+    int arg1 = machine->ReadRegister(4);
+    int arg2 = machine->ReadRegister(5);
+    int arg3 = machine->ReadRegister(6);
+    //int arg4 = machine->ReadRegister(7);
+	
+	char buffer[256];
+	OpenFile *op;
 
-    if ((which == SyscallException) && (type == SC_Halt)) {
-	DEBUG('a', "Shutdown, initiated by user program.\n");
-   	interrupt->Halt();
+    if ((which == SyscallException)) {
+		switch (type) {
+			    case SC_Halt:
+						DEBUG('a', "Shutdown, initiated by user program.\n");
+						interrupt->Halt();
+						break;
+				// void Exit(int status);
+				case SC_Exit:
+						DEBUG('a', "Thread \"%s\" exited with status %d", currentThread->getName(), arg1);
+						currentThread->setExitStatus(arg1);
+						currentThread->Finish();
+						UpdateProgramCounter();
+						break;
+				// SpaceId Exec(char *name);
+				case SC_Exec:
+						ReadString(arg1, buffer);
+						OpenFile *executable;
+						executable = fileSystem->Open(buffer);
+							//if (executable == NULL)
+							//return -1;
+						
+						AddrSpace *space;
+						space = new AddrSpace(executable);
+						
+						Thread *thread;
+						thread = new Thread(buffer, 1, 0);
+						thread->space = space;
+						thread->Fork(newThreadExec, (void*) 0);
+						
+						UpdateProgramCounter();
+						machine->WriteRegister(2, (SpaceId) thread);
+						break;
+						
+				// int Join(SpaceId id);
+				case SC_Join:
+						int st;
+						st = currentThread->Join((Thread*) arg1);
+						UpdateProgramCounter();
+						machine->WriteRegister(2, st);
+						break;
+				
+				// void Create(char *name);
+				case SC_Create:
+						ReadString(arg1, buffer);
+						fileSystem->Create(buffer, 0);
+						DEBUG('a', "Created a new file called \"%s\".\n", buffer);
+						// Incrementamos Program Counters
+						UpdateProgramCounter();
+						break;
+				
+				// OpenFileId Open(char *name);
+				case SC_Open:
+						ReadString(arg1, buffer);
+						
+						op = fileSystem->Open(buffer);
+						OpenFileId fd;
+						fd = currentThread->createFD(op);
+						DEBUG('a', "Opened the file called \"%s\" with file descriptor \"%d\".\n", buffer, fd);
+						UpdateProgramCounter();
+						machine->WriteRegister(2, fd);
+						break;
+						
+				// void Write(char *buffer, int size, OpenFileId id);
+				case SC_Write:
+				// Falta parte de consola
+						
+						if (arg3 >= 2)
+						{
+							ReadBuffer(arg1, buffer, arg2);
+							
+							op = currentThread->getFD(arg3);
+							
+							op->Write(buffer, arg2);
+							DEBUG('a', "Wrote \"%s\" in the file with file descriptor \"%d\".\n", buffer, arg3);
+							UpdateProgramCounter();
+						}
+						break;
+						
+				// int Read(char *buffer, int size, OpenFileId id);
+				case SC_Read:
+						
+					 
+						if (arg3 >= 2)
+						{
+							op = currentThread->getFD(arg3);
+							
+							int readBytes;
+							readBytes = op->Read(buffer, arg2);
+							WriteBuffer(arg1, buffer, readBytes);
+							DEBUG('a', "Read \"%s\" from the file with file descriptor \"%d\".\n", buffer, arg3);
+							UpdateProgramCounter();
+							machine->WriteRegister(2, readBytes);
+						}
+						break;
+						
+				// void Close(OpenFileId id);
+				case SC_Close:
+						currentThread->removeFD(arg1);
+						DEBUG('a', "Closed the file with file descriptor \"%d\".\n",  arg1);
+						UpdateProgramCounter();
+						break;
+						
+				default: break;
+		}
     } else {
 	printf("Unexpected user mode exception %d %d\n", which, type);
 	ASSERT(false);
     }
+    
+    
+}
+
+// Hacer funciones para leer string, leer buffer, y escribir ambas
+
+void ReadString(int addr, char *buffer)
+{
+	int i = 0;
+	do
+	{
+		machine->ReadMem(addr + i, 1, (int*) &buffer[i]);
+	} while (buffer[i++] != '\0');
+}
+
+void ReadBuffer(int addr, char *buffer, int size)
+{
+	int i = 0;
+	while (i < size)
+	{
+		machine->ReadMem(addr + i, 1, (int*) &buffer[i]);
+		i++;
+	}
+}
+
+void WriteBuffer(int addr, char *buffer, int size)
+{
+	int i = 0;
+	while (i < size)
+	{
+		printf("(%d)  %c", size, buffer[i]);
+		machine->WriteMem(addr + i, 1, (int) buffer[i]);
+		i++;
+	}
+}
+
+void UpdateProgramCounter()
+{
+	int pc;
+	pc = machine->ReadRegister(PCReg);
+	machine->WriteRegister(PrevPCReg, pc);
+	pc = machine->ReadRegister(NextPCReg);
+	machine->WriteRegister(PCReg, pc);
+	pc += 4;
+	machine->WriteRegister(NextPCReg, pc);
+}
+
+void newThreadExec(void* arg)
+{
+	currentThread->space->InitRegisters();
+	currentThread->space->RestoreState();
+	machine->Run();
 }
