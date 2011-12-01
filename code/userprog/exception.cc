@@ -27,9 +27,9 @@
 #include "openfile.h"
 #include "synchconsole.h"
 
-void ReadString(int addr, char *buffer);
-void ReadBuffer(int addr, char *buffer, int size);
-void WriteBuffer(int addr, char *buffer, int size);
+bool ReadString(int addr, char *buffer);
+bool ReadBuffer(int addr, char *buffer, int size);
+bool WriteBuffer(int addr, char *buffer, int size);
 void UpdateProgramCounter();
 void newThreadExec(void* arg);
 
@@ -112,9 +112,11 @@ ExceptionHandler(ExceptionType which)
 				
 				// void Create(char *name);
 				case SC_Create:
-						ReadString(arg1, buffer);
-						fileSystem->Create(buffer, 0);
-						DEBUG('a', "Created a new file called \"%s\".\n", buffer);
+						if (ReadString(arg1, buffer))
+						{
+							fileSystem->Create(buffer, 0);
+							DEBUG('a', "Created a new file called \"%s\".\n", buffer);
+						}
 						// Incrementamos Program Counters
 						UpdateProgramCounter();
 						break;
@@ -133,35 +135,60 @@ ExceptionHandler(ExceptionType which)
 						
 				// void Write(char *buffer, int size, OpenFileId id);
 				case SC_Write:
-				// Falta parte de consola
-						
-						if (arg3 >= 2)
+						if (arg3 == ConsoleInput)
 						{
-							ReadBuffer(arg1, buffer, arg2);
-							
-							op = currentThread->getFD(arg3);
-							
-							op->Write(buffer, arg2);
-							DEBUG('a', "Wrote \"%s\" in the file with file descriptor \"%d\".\n", buffer, arg3);
-							UpdateProgramCounter();
+							printf("Invalid File Descriptor\n");
+							DEBUG('a', "Can't write in the input.\n");
 						}
+						
+						if (ReadBuffer(arg1, buffer, arg2))
+						{						
+							if (arg3 == ConsoleOutput)
+							{
+								//synchConsole->writeStr(buffer, arg2);
+								DEBUG('a', "Wrote \"%s\" to the console.\n", buffer);
+							}
+							if (arg3 >= 2)
+							{
+								op = currentThread->getFD(arg3);
+								
+								op->Write(buffer, arg2);
+								DEBUG('a', "Wrote \"%s\" in the file with file descriptor \"%d\".\n", buffer, arg3);
+							}
+						}
+						UpdateProgramCounter();
 						break;
 						
 				// int Read(char *buffer, int size, OpenFileId id);
 				case SC_Read:
 						
-					 
+						if (arg3 == ConsoleOutput)
+						{
+							printf("Invalid File Descriptor\n");
+							DEBUG('a', "Can't read the output.\n");
+							machine->WriteRegister(2, -1);
+						}
+						if (arg3 == ConsoleInput)
+						{
+							//synchConsole->readStr((char *)arg1, arg2);
+							DEBUG('a', "Read \"%s\" from the console.\n", buffer);
+							machine->WriteRegister(2, arg2);
+						}
 						if (arg3 >= 2)
 						{
 							op = currentThread->getFD(arg3);
 							
 							int readBytes;
 							readBytes = op->Read(buffer, arg2);
-							WriteBuffer(arg1, buffer, readBytes);
-							DEBUG('a', "Read \"%s\" from the file with file descriptor \"%d\".\n", buffer, arg3);
-							UpdateProgramCounter();
-							machine->WriteRegister(2, readBytes);
+							if (WriteBuffer(arg1, buffer, readBytes))
+							{
+								DEBUG('a', "Read \"%s\" from the file with file descriptor \"%d\".\n", buffer, arg3);
+								machine->WriteRegister(2, readBytes);
+							}
+							else
+								machine->WriteRegister(2, -1);
 						}
+						UpdateProgramCounter();
 						break;
 						
 				// void Close(OpenFileId id);
@@ -183,34 +210,39 @@ ExceptionHandler(ExceptionType which)
 
 // Hacer funciones para leer string, leer buffer, y escribir ambas
 
-void ReadString(int addr, char *buffer)
+bool ReadString(int addr, char *buffer)
 {
 	int i = 0;
 	do
 	{
-		machine->ReadMem(addr + i, 1, (int*) &buffer[i]);
+		if (!machine->ReadMem(addr + i, 1, (int*) &buffer[i]))
+			return false;
 	} while (buffer[i++] != '\0');
+	return true;
 }
 
-void ReadBuffer(int addr, char *buffer, int size)
+bool ReadBuffer(int addr, char *buffer, int size)
 {
 	int i = 0;
 	while (i < size)
 	{
-		machine->ReadMem(addr + i, 1, (int*) &buffer[i]);
+		if (!machine->ReadMem(addr + i, 1, (int*) &buffer[i]))
+			return false;
 		i++;
 	}
+	return true;
 }
 
-void WriteBuffer(int addr, char *buffer, int size)
+bool WriteBuffer(int addr, char *buffer, int size)
 {
 	int i = 0;
 	while (i < size)
 	{
-		printf("(%d)  %c", size, buffer[i]);
-		machine->WriteMem(addr + i, 1, (int) buffer[i]);
+		if (!machine->WriteMem(addr + i, 1, (int) buffer[i]))
+			return false;
 		i++;
 	}
+	return true;
 }
 
 void UpdateProgramCounter()
