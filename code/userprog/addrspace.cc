@@ -86,7 +86,7 @@ AddrSpace::AddrSpace(OpenFile *executable)
     pageTable = new TranslationEntry[numPages];
     for (i = 0; i < numPages; i++) {
 	pageTable[i].virtualPage = i;	// for now, virtual page # = phys page #
-	pageTable[i].physicalPage = i;
+	pageTable[i].physicalPage = getPhysicalPage();
 	pageTable[i].valid = true;
 	pageTable[i].use = false;
 	pageTable[i].dirty = false;
@@ -103,8 +103,10 @@ AddrSpace::AddrSpace(OpenFile *executable)
     if (noffH.code.size > 0) {
         DEBUG('a', "Initializing code segment, at 0x%x, size %d\n", 
 			noffH.code.virtualAddr, noffH.code.size);
-        executable->ReadAt(&(machine->mainMemory[noffH.code.virtualAddr]),
-			noffH.code.size, noffH.code.inFileAddr);
+        for(i=0; i < noffH.code.size; i++) {
+			//executable->ReadAt(&(machine->mainMemory[pageTable[noffH.code.virtualAddr].physicalPage]),
+				1, noffH.code.inFileAddr + i);
+		}
     }
     if (noffH.initData.size > 0) {
         DEBUG('a', "Initializing data segment, at 0x%x, size %d\n", 
@@ -122,7 +124,10 @@ AddrSpace::AddrSpace(OpenFile *executable)
 
 AddrSpace::~AddrSpace()
 {
-   delete pageTable;
+	for (i = 0; i < numPages; i++)
+		bitMap->Clear(pageTable[i].physicalPage);
+
+	delete pageTable;
 }
 
 //----------------------------------------------------------------------
@@ -180,4 +185,10 @@ void AddrSpace::RestoreState()
 {
     machine->pageTable = pageTable;
     machine->pageTableSize = numPages;
+}
+
+int getPhysicalPage()
+{
+	ASSERT(bitMap->NumClear() != 0);
+	return bitMap->Find();	
 }

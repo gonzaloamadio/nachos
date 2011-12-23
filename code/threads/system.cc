@@ -181,6 +181,7 @@ Initialize(int argc, char **argv)
 #ifdef USER_PROGRAM
     machine = new Machine(debugUserProg);	// this must come first
     synchConsole = new SynchConsole(NULL, NULL);
+    bitMap =  new BitMap(NumPhysPages);
 #endif
 
 #ifdef FILESYS
