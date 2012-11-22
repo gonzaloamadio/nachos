@@ -7,29 +7,27 @@
 
 class SynchConsole {
 
- public:
+	public:
 
-  SynchConsole(char* in, char* out);
-  ~SynchConsole();
+	SynchConsole(char* in, char* out);
+	~SynchConsole();
 
-  const char get();
-  void put(char c);
+	const char get();
+	void put(char c);
 
-  void writeStr(char *s, int size);
+	void writeStr(char *s, int size);
 
-  void readStr(char* buffer, int size);
+	int readStr(char* buffer, int size);
 
   
-  void readAvailV(){readAvail->V();}
-  void writeDoneV(){writeDone->V();}
+	void readAvailV(){readAvail->V();}
+	void writeDoneV(){writeDone->V();}
 
- private:
-
-  Semaphore* readAvail;
-  Semaphore* writeDone;
-  Console* console;
-  Lock*       lock;
-
+	private:
+		Semaphore* readAvail;
+		Semaphore* writeDone;
+		Console* console;
+		Lock* lock;
 };
 
 #endif  //SYNCHCONSOLE_H

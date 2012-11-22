@@ -416,7 +416,7 @@ Thread::Join(Thread* child)
 			// Hacemos Receive sobre el puerto del hijo. Como la llamada
 			// es bloqueante, el hilo que llama al Join se bloquea y
 			// recién cuando se produzca el Send se desbloqueará. Esto
-			// ocurrira solo cuando el child termine de ejecutarse, ya
+			// ocurrirá solo cuando el child termine de ejecutarse, ya
 			// que la llamada a Send la colocamos en Thread::Finish.
 			joinPort->Receive(&msg);
 			// El padre libera el puerto del hijo. Si esto se hiciera en

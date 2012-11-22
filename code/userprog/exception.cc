@@ -28,6 +28,7 @@
 #include "synchconsole.h"
 
 bool ReadString(int addr, char *buffer);
+bool WriteString(int addr, char *buffer);
 bool ReadBuffer(int addr, char *buffer, int size);
 bool WriteBuffer(int addr, char *buffer, int size);
 void UpdateProgramCounter();
@@ -68,7 +69,7 @@ ExceptionHandler(ExceptionType which)
 	
 	char buffer[256];
 	OpenFile *op;
-
+	
     if ((which == SyscallException)) {
 		switch (type) {
 			    case SC_Halt:
@@ -80,15 +81,24 @@ ExceptionHandler(ExceptionType which)
 						DEBUG('a', "Thread \"%s\" exited with status %d", currentThread->getName(), arg1);
 						currentThread->setExitStatus(arg1);
 						currentThread->Finish();
-						UpdateProgramCounter();
 						break;
 				// SpaceId Exec(char *name);
 				case SC_Exec:
-						ReadString(arg1, buffer);
+						if (!ReadString(arg1, buffer))
+						{
+							DEBUG('a', "Could not read the string in user space in syscall Exec\n"); 
+							machine->WriteRegister(2, -1);
+							break;
+						}
+						
 						OpenFile *executable;
 						executable = fileSystem->Open(buffer);
-							//if (executable == NULL)
-							//return -1;
+						if (executable == NULL)
+						{
+							DEBUG('a', "Could not open the executable \"%s\"\n", buffer); 
+							machine->WriteRegister(2, -1);
+							break;
+						}
 						
 						AddrSpace *space;
 						space = new AddrSpace(executable);
@@ -98,7 +108,6 @@ ExceptionHandler(ExceptionType which)
 						thread->space = space;
 						thread->Fork(newThreadExec, (void*) 0);
 						
-						UpdateProgramCounter();
 						machine->WriteRegister(2, (SpaceId) thread);
 						break;
 						
@@ -106,7 +115,6 @@ ExceptionHandler(ExceptionType which)
 				case SC_Join:
 						int st;
 						st = currentThread->Join((Thread*) arg1);
-						UpdateProgramCounter();
 						machine->WriteRegister(2, st);
 						break;
 				
@@ -117,19 +125,30 @@ ExceptionHandler(ExceptionType which)
 							fileSystem->Create(buffer, 0);
 							DEBUG('a', "Created a new file called \"%s\".\n", buffer);
 						}
-						// Incrementamos Program Counters
-						UpdateProgramCounter();
+						else
+							DEBUG('a', "Could not read the string in user space in syscall Create\n"); 
 						break;
 				
 				// OpenFileId Open(char *name);
 				case SC_Open:
-						ReadString(arg1, buffer);
+						if (!ReadString(arg1, buffer))
+						{
+							DEBUG('a', "Could not read the string in user space in syscall Open\n"); 
+							machine->WriteRegister(2, -1);
+							break;
+						}
 						
 						op = fileSystem->Open(buffer);
+						if (op == NULL)
+						{
+							DEBUG('a', "Could not open the file \"%s\"\n", buffer); 
+							machine->WriteRegister(2, -1);
+							break;
+						}
+						
 						OpenFileId fd;
 						fd = currentThread->createFD(op);
 						DEBUG('a', "Opened the file called \"%s\" with file descriptor \"%d\".\n", buffer, fd);
-						UpdateProgramCounter();
 						machine->WriteRegister(2, fd);
 						break;
 						
@@ -139,44 +158,64 @@ ExceptionHandler(ExceptionType which)
 						{
 							printf("Invalid File Descriptor\n");
 							DEBUG('a', "Can't write in the input.\n");
+							break;
 						}
 						
 						if (ReadBuffer(arg1, buffer, arg2))
 						{						
 							if (arg3 == ConsoleOutput)
 							{
-								//synchConsole->writeStr(buffer, arg2);
+								synchConsole->writeStr(buffer, arg2);
 								DEBUG('a', "Wrote \"%s\" to the console.\n", buffer);
 							}
 							if (arg3 >= 2)
 							{
 								op = currentThread->getFD(arg3);
-								
-								op->Write(buffer, arg2);
-								DEBUG('a', "Wrote \"%s\" in the file with file descriptor \"%d\".\n", buffer, arg3);
+								if (op != NULL)
+								{
+									op->Write(buffer, arg2);
+									DEBUG('a', "Wrote \"%s\" in the file with file descriptor \"%d\".\n", buffer, arg3);
+								}
+								else
+									DEBUG('a', "There is no file descriptor with number \"%d\"\n", arg3);
 							}
 						}
-						UpdateProgramCounter();
+						else
+							DEBUG('a', "Could not read the buffer in syscall Write\n"); 
 						break;
 						
 				// int Read(char *buffer, int size, OpenFileId id);
 				case SC_Read:
-						
 						if (arg3 == ConsoleOutput)
 						{
 							printf("Invalid File Descriptor\n");
 							DEBUG('a', "Can't read the output.\n");
 							machine->WriteRegister(2, -1);
 						}
+						
 						if (arg3 == ConsoleInput)
 						{
-							//synchConsole->readStr((char *)arg1, arg2);
-							DEBUG('a', "Read \"%s\" from the console.\n", buffer);
-							machine->WriteRegister(2, arg2);
+							int readBytes;
+							readBytes = synchConsole->readStr(buffer, arg2);
+							if (!WriteBuffer(arg1, buffer, arg2))
+							{
+								DEBUG('a', "Could not write string to user space in syscall Read\n");
+								machine->WriteRegister(2, -1);
+								break;
+							}
+							DEBUG('a', "Read \"%s\" with length %d from the console.\n", buffer, readBytes);
+							machine->WriteRegister(2, readBytes);
 						}
+						
 						if (arg3 >= 2)
 						{
 							op = currentThread->getFD(arg3);
+							if (op == NULL)
+							{
+								DEBUG('a', "There is no file descriptor with number \"%d\"\n", arg3);
+								machine->WriteRegister(2, -1);
+								break;
+							}
 							
 							int readBytes;
 							readBytes = op->Read(buffer, arg2);
@@ -186,20 +225,22 @@ ExceptionHandler(ExceptionType which)
 								machine->WriteRegister(2, readBytes);
 							}
 							else
+							{
+								DEBUG('a', "Could not write string to user space in syscall Read\n");
 								machine->WriteRegister(2, -1);
+							}
 						}
-						UpdateProgramCounter();
 						break;
 						
 				// void Close(OpenFileId id);
 				case SC_Close:
 						currentThread->removeFD(arg1);
 						DEBUG('a', "Closed the file with file descriptor \"%d\".\n",  arg1);
-						UpdateProgramCounter();
 						break;
 						
 				default: break;
 		}
+		UpdateProgramCounter();
     } else {
 	printf("Unexpected user mode exception %d %d\n", which, type);
 	ASSERT(false);
@@ -216,6 +257,17 @@ bool ReadString(int addr, char *buffer)
 	do
 	{
 		if (!machine->ReadMem(addr + i, 1, (int*) &buffer[i]))
+			return false;
+	} while (buffer[i++] != '\0');
+	return true;
+}
+
+bool WriteString(int addr, char *buffer)
+{
+	int i = 0;
+	do
+	{
+		if (!machine->WriteMem(addr + i, 1, (int) buffer[i]))
 			return false;
 	} while (buffer[i++] != '\0');
 	return true;

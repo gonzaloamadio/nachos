@@ -36,6 +36,8 @@ SynchDisk   *synchDisk;
 #ifdef USER_PROGRAM	// requires either FILESYS or FILESYS_STUB
 Machine *machine;	// user program memory and registers
 SynchConsole *synchConsole;
+BitMap *bitMap;
+Timer *timeSlicer;
 #endif
 
 #ifdef NETWORK
@@ -73,6 +75,16 @@ TimerInterruptHandler(void* dummy)
 	interrupt->YieldOnReturn();
 }
 
+void tsHandler (void*)
+{
+  static int contador_tics = 0;
+  contador_tics++;
+  if (contador_tics==10)
+  {
+    contador_tics=0;
+    interrupt->YieldOnReturn();
+  }
+}
 //----------------------------------------------------------------------
 // Initialize
 // 	Initialize Nachos global data structures.  Interpret command
@@ -182,6 +194,8 @@ Initialize(int argc, char **argv)
     machine = new Machine(debugUserProg);	// this must come first
     synchConsole = new SynchConsole(NULL, NULL);
     bitMap =  new BitMap(NumPhysPages);
+    timeSlicer = new Timer (tsHandler, 0, false);
+
 #endif
 
 #ifdef FILESYS

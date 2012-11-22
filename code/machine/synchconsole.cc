@@ -1,55 +1,67 @@
 #include "synchconsole.h"
 
-//----------------------------------------------------------------------
-// ConsoleInterruptHandlers
-// 	Wake up the thread that requested the I/O.
-//----------------------------------------------------------------------
-
-void readCallback(int arg) {((SynchConsole*)arg)->readAvailV();}
-void writeCallback(int arg){((SynchConsole*)arg)->writeDoneV();}
-
-SynchConsole::SynchConsole(char* in, char* out){
-
-  console   = new Console(in,out,
-			  readCallback,
-			  writeCallback,
-			  (int)this);
-
-  readAvail = new Semaphore("Read Semaphore SynchConsole",0);
-  writeDone = new Semaphore("Write Semaphore SynchConsole",0);
-  lock      = new Lock("Lock SynchConsole");
+void readCallback(void* arg)
+{
+	((SynchConsole*) arg)->readAvailV();
+}
+void writeCallback(void* arg)
+{
+	((SynchConsole*) arg)->writeDoneV();
 }
 
-SynchConsole::~SynchConsole(){
+SynchConsole::SynchConsole(char* in, char* out)
+{
+	console = new Console(in,out, (VoidFunctionPtr) readCallback,
+				(VoidFunctionPtr) writeCallback,
+				(void*) this);
 
-  delete lock;
-  delete writeDone;
-  delete readAvail;
-  delete console;
+	readAvail = new Semaphore("Read Semaphore SynchConsole", 0);
+	writeDone = new Semaphore("Write Semaphore SynchConsole", 0);
+	lock = new Lock("Lock SynchConsole");
 }
 
-void SynchConsole::put(char c){
-  lock->Acquire();
-  console->PutChar(c);
-  writeDone->P();
-  lock->Release();
+SynchConsole::~SynchConsole()
+{
+	delete lock;
+	delete writeDone;
+	delete readAvail;
+	delete console;
 }
 
-const char SynchConsole::get(){
-  lock->Acquire();
-  readAvail->P();
-  char c = console->GetChar();
-  lock->Release();
-  return c;
+void SynchConsole::put(char c)
+{
+	lock->Acquire();
+	console->PutChar(c);
+	writeDone->P();
+	lock->Release();
 }
 
-void SynchConsole::readStr(char* buffer, int size){
-    for (int i = 0; i < size ; i++)
-      buffer[i] = get();
+const char SynchConsole::get()
+{
+	lock->Acquire();
+	readAvail->P();
+	char c = console->GetChar();
+	lock->Release();
+	return c;
 }
 
-void SynchConsole::writeStr(char *s, int size){
-    for (int i = 0; i < size; i++)
-      put(s[i]);
-  }
+int SynchConsole::readStr(char* buffer, int size)
+{
+	int i;
+	for (i = 0; i < size; i++)
+	{
+		if ((buffer[i] = get()) == '\n')
+			break;
+	}
+	buffer[++i] = '\0';
+	return i;
+}
 
+void SynchConsole::writeStr(char *s, int size)
+{
+	for (int i = 0; i < size; i++)
+	{
+		put(s[i]);
+		if (s[i] == '\0') break;
+	}
+}

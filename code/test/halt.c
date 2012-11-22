@@ -15,15 +15,18 @@
 int
 main()
 {
-	OpenFileId o, s;
+	//OpenFileId o, s, o2;
 	char buffer[20];
-    Create("archivo_nuevo");
+    /*Create("archivo_nuevo");
     Create("archivo_nuevo_2");
     o = Open("archivo_nuevo");
     Write("Hola Mundo!", 11, o);
-    Read(buffer, 17, o);
+    o2 = Open("archivo_nuevo");
+    Read(buffer, 17, o2);
     s = Open("archivo_nuevo_2");
-    Write(buffer, 6, s);
+    Write(buffer, 17, s);*/
+    Read(buffer, 10, ConsoleInput);
+    Write(buffer, 10, ConsoleOutput);
     Halt();
     /* not reached */
 }

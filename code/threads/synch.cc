@@ -214,7 +214,7 @@ bool Lock::isHeldByCurrentThread()
 // Condition::Condition
 //  Inicializamos la variable de condición.
 //  
-//  "debugName" nombre arbitrario de la variable de la condición.
+//  "debugName" nombre arbitrario de la variable de condición.
 //  "conditionLock" lock que va a usar la variable de condición.
 //----------------------------------------------------------------------
 
